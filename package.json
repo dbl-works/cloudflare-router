@@ -1,0 +1,17 @@
+{
+  "name": "cloudflare-router",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^3.0.0",
+    "@types/jest": "^27.0.2",
+    "@types/node-fetch": "^3.0.3",
+    "jest": "^27.3.0",
+    "jest-fetch-mock": "^3.0.3",
+    "ts-jest": "^27.0.7",
+    "typescript": "^4.4.4"
+  }
+}
