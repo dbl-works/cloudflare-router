@@ -11,7 +11,7 @@ import { startWorker } from '@dbl-works/cloudflare-router'
 
 startWorker({
   routes: {
-    '*.example.com/*' => 's3://assets.example.com',
+    'example.com': 's3://eu-central-1.assets.example.com',
   }
 })
 ```
