@@ -16,6 +16,7 @@ startWorker({
 })
 ```
 
+:warning: this will only match subdomains of `example.com`. If you want the root domain to be included in the rule, use `*example.com/*` instead.
 
 
 ## Match rules
