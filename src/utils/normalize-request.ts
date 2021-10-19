@@ -1,6 +1,6 @@
 import { Config } from '../config'
 
-const MEDIA_FILE_EXTENSIONS = 'js css jpg png gif woff'.split(' ')
+const MEDIA_FILE_EXTENSIONS = 'css gif ico jpg js otf jpeg png svg ttf webp woff woff2'.split(' ')
 const hasMediaFileExtension = (path: string): boolean => {
   const ext = path.split('.').pop().toLowerCase()
   return MEDIA_FILE_EXTENSIONS.includes(ext)
