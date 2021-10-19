@@ -1,22 +1,9 @@
 import { Config, DEFAULT_CONFIG } from './config'
+import normalizeRequest from './utils/normalize-request'
 
-export default class CloudflareRouter {
-  config: Config
-
-  constructor(config: Partial<Config>) {
-    this.config = {
-      ...DEFAULT_CONFIG,
-      ...config,
-    }
-  }
-
-  listen() {
-    addEventListener('fetch', (event) => {
-      event.respondWith(this.handleRequest(event.request))
-    })
-  }
-
-  private handleRequest(request: Request) {
-    return fetch(request)
-  }
+export const startWorker = (config: Partial<Config>) => {
+  addEventListener('fetch', (event: any) => {
+    const request = normalizeRequest(event.request, config.routes)
+    event.respondWith(fetch(request))
+  })
 }

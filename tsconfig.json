@@ -1,11 +1,17 @@
 {
   "compilerOptions": {
-    "target": "ES5",
-    "module": "CommonJS",
-    "lib": ["ES5"],
-    "types": [
-      "@cloudflare/workers-types",
-      "jest"
-    ]
-  }
+    "module": "commonjs",
+    "target": "es5",
+    "lib": ["es2015", "webworker"],
+    "jsx": "react",
+    "noImplicitAny": true,
+    "preserveConstEnums": true,
+    "outDir": "./dist",
+    "moduleResolution": "node"
+  },
+  "include": [
+    "index.ts",
+    "src/*.ts",
+    "src/**/*.ts",
+  ]
 }

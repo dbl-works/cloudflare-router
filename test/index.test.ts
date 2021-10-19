@@ -1,14 +1,13 @@
-import CloudflareRouter from '../src/cloudflare-router'
+import { startWorker } from '../src/cloudflare-router'
+import { Config } from '../src/config'
 
-test('assigns a default, empty, config', () => {
-  const router = new CloudflareRouter({})
-  expect(router.config).toEqual({
-    deployments: [],
-    routes: {},
-  })
-})
+const TEST_CONFIG: Config = {
+  deployments: [],
+  routes: {},
+}
 
-test('it can call .listen()', () => {
-  const router = new CloudflareRouter({})
-  expect(router.listen).toBeDefined()
+// Figure out how to mock the request
+test('it works', () => {
+  const response = startWorker(TEST_CONFIG)
+  expect(response).not.toBeNull()
 })

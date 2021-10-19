@@ -7,14 +7,13 @@ Easily manage routing using Cloudflare Workers
 ## Usage
 
 ```typescript
-import CloudflareRouter from '@dbl-works/cloudflare-router'
+import { startWorker } from '@dbl-works/cloudflare-router'
 
-const router = new CloudflareRouter({
+startWorker({
   routes: {
     '*.example.com/*' => 's3://assets.example.com',
   }
 })
-router.listen()
 ```
 
 
