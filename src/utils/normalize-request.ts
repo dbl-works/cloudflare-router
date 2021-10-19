@@ -15,6 +15,11 @@ export default function normalizeRequest(request: Request, routes: Config['route
     let url = originalUrl
     let newUrl = value
     if (url.indexOf(key) !== -1) {
+
+      if (originalUrlWithoutScheme.startsWith(key) === false && key.startsWith('/') === false) {
+        break
+      }
+
       const singlePageApp = newUrl.indexOf('s3://') === 0
       const isMediaFile = hasMediaFileExtension(originalUrl)
       if (singlePageApp) {

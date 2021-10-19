@@ -10,8 +10,8 @@ const TEST_ROUTES = {
 }
 
 test('returns the original input if no matching routes', () => {
-  const actual = normalizeRequest(new Request('http://example.com/'), TEST_ROUTES)
-  expect(actual.url).toEqual('http://example.com/')
+  const actual = normalizeRequest(new Request('https://example.com/'), TEST_ROUTES)
+  expect(actual.url).toEqual('https://example.com/')
 })
 
 test('maps root js file to s3 bucket subpath', () => {
@@ -52,6 +52,11 @@ test('maps SPA JS FILE to s3 bucket location', () => {
 test('maps SPA root to s3 bucket root without subpath', () => {
   const actual = normalizeRequest(new Request('https://fonts.example.com/'), TEST_ROUTES)
   expect(actual.url).toEqual('https://s3.us-east-1.amazonaws.com/fonts.example.com/index.html')
+})
+
+test('forwards original request when domain is not exact match', () => {
+  const actual = normalizeRequest(new Request('https://api.fonts.example.com/test/'), TEST_ROUTES)
+  expect(actual.url).toEqual('https://api.fonts.example.com/test/')
 })
 
 test('simple path replace', () => {
