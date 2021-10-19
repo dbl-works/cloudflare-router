@@ -11,12 +11,11 @@ import { startWorker } from '@dbl-works/cloudflare-router'
 
 startWorker({
   routes: {
-    '*.example.com/*' => 's3://assets.example.com',
+    'example.com': 's3://eu-central-1.assets.example.com',
   }
 })
 ```
 
-:warning: this will only match subdomains of `example.com`. If you want the root domain to be included in the rule, use `*example.com/*` instead.
 
 
 ## Match rules
