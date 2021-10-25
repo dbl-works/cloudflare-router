@@ -6,7 +6,7 @@ export const startWorker = (config: Config) => {
   addEventListener('fetch', (event: any) => {
     withAuth(event, config, () => {
       const request = normalizeRequest(event.request, config.routes)
-      event.respondWith(fetch(request))
+      return fetch(request)
     })
   })
 }
