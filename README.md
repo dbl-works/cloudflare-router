@@ -22,3 +22,32 @@ startWorker({
 
 - Starting with `/` does a path only match
 - Any other start will assume matching against `[domain][path]` as the value
+
+
+
+## Basic Authentication
+
+You can protect a deployment by defining basic auth in the config.
+
+```typescript
+startWorker({
+  deployments: [
+    {
+      accountId: '12345',
+      zoneId: 'abcdef',
+      routes: [
+        '*example.com/*',
+      ],
+      auth: [
+        {
+          type: 'basic',
+          username: 'test',
+          password: 'letmein',
+        },
+      ],
+    },
+  ],
+  routes: {
+  },
+})
+```
