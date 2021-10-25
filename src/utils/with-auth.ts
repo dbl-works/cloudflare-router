@@ -23,7 +23,8 @@ export const withAuth = (event: FetchEvent, config: Config, callback: (event: Fe
   }
 
   // If no deployments are defined, then just allow all requests to passthrough
-  if (config.deployments.length === 0) {
+  // We also allow options requests here to get cors headers from origin
+  if (config.deployments.length === 0 || event.request.method === 'OPTIONS') {
     return respondWith(callback(event))
   }
 

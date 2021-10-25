@@ -36,6 +36,23 @@ test('it calls the callback when no deployments are defined', () => {
   expect(callback).toHaveBeenCalled()
 })
 
+test('it calls the callback when request method is options', () => {
+  const callback = jest.fn()
+  const event = new FetchEvent('fetch', {
+    request: new Request('https://example.com/secrets', {
+      method: 'OPTIONS',
+    })
+  })
+  const config: Config = {
+    deployments: [
+      MOCK_DEPLOYMENT_WITH_AUTH,
+    ],
+    routes: {},
+  }
+  withAuth(event, config, callback)
+  expect(callback).toHaveBeenCalled()
+})
+
 test('it calls the callback when a deployment is matched without auth', () => {
   const callback = jest.fn()
   const event = new FetchEvent('fetch', {
