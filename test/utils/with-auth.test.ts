@@ -81,7 +81,7 @@ test('it does not call callback when there is no matching deployment', async () 
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
-  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Reveneo Platform", charset="UTF-8"')
+  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 
@@ -98,7 +98,7 @@ test('it does not call the callback when auth is required but missing', async ()
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
-  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Reveneo Platform", charset="UTF-8"')
+  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 
@@ -119,7 +119,7 @@ test('it does not call the callback when auth is required but username is incorr
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
-  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Reveneo Platform", charset="UTF-8"')
+  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 
@@ -140,7 +140,7 @@ test('it does not call the callback when auth is required but password is incorr
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
-  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Reveneo Platform", charset="UTF-8"')
+  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 

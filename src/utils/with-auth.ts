@@ -44,7 +44,7 @@ export const withAuth = (event: FetchEvent, config: Config, callback: (event: Fe
       return respondWith(new Response("Unauthorized.", {
         status: 401,
         headers: {
-          "WWW-Authenticate": 'Basic realm="Reveneo Platform", charset="UTF-8"',
+          "WWW-Authenticate": 'Basic realm="Cloudflare Router", charset="UTF-8"',
         },
       }))
     }
