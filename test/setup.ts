@@ -11,3 +11,8 @@ global.addEventListener = ((eventName: string, listener: (event: EventListenerOb
     },
   } as any)
 }) as any
+global.FetchEvent = ((name: string, options: any) => {
+  return {
+    request: options.request,
+  }
+}) as any
