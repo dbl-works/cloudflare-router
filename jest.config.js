@@ -6,4 +6,11 @@ module.exports = {
   setupFiles: [
     './test/setup.ts',
   ],
+  coverageReporters: [
+    'clover',
+    'html',
+    'json',
+    'lcov',
+    'text',
+  ],
 }
