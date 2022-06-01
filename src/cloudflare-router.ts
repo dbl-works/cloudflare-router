@@ -1,6 +1,9 @@
+import { Caches } from './binding'
 import { Config } from './config'
 import normalizeRequest from './utils/normalize-request'
 import { withAuth } from './utils/with-auth'
+
+declare let caches: Caches
 
 export const startWorker = (config: Config) => {
   addEventListener('fetch', (event: any) => {
