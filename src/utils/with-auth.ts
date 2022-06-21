@@ -36,17 +36,27 @@ export const withAuth = (event: FetchEvent, config: Config, callback: (event: Fe
 
   // If auth is defined, then let's check it
   // NOTE: Assuming basic auth since that is the only optional configurable
-  if (deployment.auth && deployment.auth[0]) {
-    const authConfig = deployment.auth[0]
-    const expectedAuth = { username: authConfig.username, password: authConfig.password }
-    const attemptedAuth = getCredentialsFromAuthorizationHeader(event.request.headers.get('Authorization'))
-    if (expectedAuth.username !== attemptedAuth.username || expectedAuth.password !== attemptedAuth.password) {
-      return respondWith(new Response("Unauthorized.", {
-        status: 401,
-        headers: {
-          "WWW-Authenticate": 'Basic realm="Cloudflare Router", charset="UTF-8"',
-        },
-      }))
+  if (deployment.auth && Array.isArray(deployment.auth)) {
+    for (const authConfig of deployment.auth) {
+      if (authConfig.type === 'ip') {
+        const clientIp = event.request.headers.get('CF-Connecting-IP') || '0.0.0.0/0'
+        console.log('Checking IP address.', authConfig.allow, 'includes', clientIp)
+        // TODO: Add support for ip ranges
+        if (authConfig.allow.includes(clientIp)) {
+          return respondWith(callback(event))//, { headers: { 'X-Auth-Method': authConfig.type } })
+        }
+      } else if (authConfig.type === 'basic') {
+        const expectedAuth = { username: authConfig.username, password: authConfig.password }
+        const attemptedAuth = getCredentialsFromAuthorizationHeader(event.request.headers.get('Authorization'))
+        if (expectedAuth.username !== attemptedAuth.username || expectedAuth.password !== attemptedAuth.password) {
+          return respondWith(new Response("Unauthorized.", {
+            status: 401,
+            headers: {
+              "WWW-Authenticate": 'Basic realm="Cloudflare Router", charset="UTF-8"',
+            },
+          }))
+        }
+      }
     }
   }
 
