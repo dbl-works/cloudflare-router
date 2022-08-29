@@ -1,6 +1,8 @@
 import jestFetchMock from 'jest-fetch-mock'
+import CacheMock from 'browser-cache-mock';
 
 jestFetchMock.enableMocks()
+const cacheMock = new CacheMock();
 
 // Temporary mocks
 global.addEventListener = ((eventName: string, listener: (event: EventListenerObject) => void) => {
@@ -17,3 +19,9 @@ global.FetchEvent = ((name: string, options: any) => {
     respondWith: (response: Response) => response,
   }
 }) as any
+global.caches = {
+  default: {
+    ...cacheMock,
+    match: async () => cacheMock
+  }
+} as any
