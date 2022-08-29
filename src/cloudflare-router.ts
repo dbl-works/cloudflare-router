@@ -9,7 +9,9 @@ export const startWorker = (config: Config) => {
   addEventListener('fetch', (event: any) => {
     withAuth(event, config, async () => {
       const request = normalizeRequest(event.request, config.routes)
-      const cache = caches.default
+      // The same cache shared with fetch requests.
+      // Useful when needing to override content that is already cached, after receiving the response.
+      const cache = (caches as Caches).default
       let response = await cache.match(request.url)
 
       if (!response) {
