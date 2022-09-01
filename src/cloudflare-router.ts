@@ -20,7 +20,7 @@ export const startWorker = (config: Config) => {
         const headers = {
           ...response.headers,
           'peep-headers': JSON.stringify(response.headers),
-          'squake-router-version': '0.3.0',
+          'squake-router-version': '0.2.3',
           'squake-response': 'false',
           'cache-control': 'public, max-age=86400',
         }
@@ -30,7 +30,7 @@ export const startWorker = (config: Config) => {
         const headers = {
           ...response.headers,
           'peep-headers': JSON.stringify(response.headers),
-          'squake-router-version': '0.3.0',
+          'squake-router-version': '0.2.3',
           'squake-response': 'true',
         }
         response = new Response(response.body, { ...response, headers })
