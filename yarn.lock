@@ -779,11 +779,6 @@ braces@^3.0.1:
   dependencies:
     fill-range "^7.0.1"
 
-browser-cache-mock@^0.1.7:
-  version "0.1.7"
-  resolved "https://registry.yarnpkg.com/browser-cache-mock/-/browser-cache-mock-0.1.7.tgz#4bfa4aa1022b1ce642e656e3cc8158deaaf30e12"
-  integrity sha512-+0bM5cjnj8Z8caAYBe1A9AA30juciI8fBHhw+aPBSSGL89UHPUcBA/E6CrQAecC635MEfx8qadTnaocEwE2q8Q==
-
 browser-process-hrtime@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/browser-process-hrtime/-/browser-process-hrtime-1.0.0.tgz#3c9b4b7d782c8121e56f10106d84c0d0ffc94626"

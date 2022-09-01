@@ -1,9 +1,6 @@
-import { Caches } from './binding'
 import { Config } from './config'
 import normalizeRequest from './utils/normalize-request'
 import { withAuth } from './utils/with-auth'
-
-declare let caches: Caches
 
 async function handleRequest(request: Request) {
   const url = new URL(request.url);
