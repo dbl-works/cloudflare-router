@@ -16,7 +16,10 @@ export const startWorker = (config: Config) => {
 
       if (!response) {
         response = await fetch(request)
-        const headers = { 'cache-control': 'public, max-age=86400' }
+        const headers = {
+          ...response.headers,
+          'cache-control': 'public, max-age=86400'
+        }
         response = new Response(response.body, { ...response, headers })
         event.waitUntil(cache.put(request.url, response.clone()))
       }
