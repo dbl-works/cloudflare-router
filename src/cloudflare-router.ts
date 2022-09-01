@@ -19,6 +19,7 @@ export const startWorker = (config: Config) => {
         response = await fetch(request)
         const headers = {
           ...response.headers,
+          'request-url': request.url,
           'peep-body': JSON.stringify(response.body),
           'peep-status': response.status,
           'peep-headers': JSON.stringify(response.headers),
@@ -31,6 +32,7 @@ export const startWorker = (config: Config) => {
       } else {
         const headers = {
           ...response.headers,
+          'request-url': request.url,
           'peep-body': JSON.stringify(response.body),
           'peep-status': response.status,
           'peep-headers': JSON.stringify(response.headers),
