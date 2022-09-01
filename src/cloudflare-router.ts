@@ -19,16 +19,17 @@ export const startWorker = (config: Config) => {
         response = await fetch(request)
         const headers = {
           ...response.headers,
-          'heeaders':
+          'peep-headers': JSON.stringify(response.headers),
           'squake-router-version': '0.3.0',
           'squake-response': 'false',
-          'cache-control': 'public, max-age=86400'
+          'cache-control': 'public, max-age=86400',
         }
         response = new Response(response.body, { ...response, headers })
         event.waitUntil(cache.put(request.url, response.clone()))
       } else {
         const headers = {
           ...response.headers,
+          'peep-headers': JSON.stringify(response.headers),
           'squake-router-version': '0.3.0',
           'squake-response': 'true',
         }
