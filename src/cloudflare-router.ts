@@ -19,8 +19,10 @@ export const startWorker = (config: Config) => {
         response = await fetch(request)
         const headers = {
           ...response.headers,
+          'peep-body': JSON.stringify(response.body),
+          'peep-status': response.status,
           'peep-headers': JSON.stringify(response.headers),
-          'squake-router-version': '0.2.3',
+          'squake-router-version': '0.2.4',
           'squake-response': 'false',
           'cache-control': 'public, max-age=86400',
         }
@@ -29,8 +31,10 @@ export const startWorker = (config: Config) => {
       } else {
         const headers = {
           ...response.headers,
+          'peep-body': JSON.stringify(response.body),
+          'peep-status': response.status,
           'peep-headers': JSON.stringify(response.headers),
-          'squake-router-version': '0.2.3',
+          'squake-router-version': '0.2.4',
           'squake-response': 'true',
         }
         response = new Response(response.body, { ...response, headers })
