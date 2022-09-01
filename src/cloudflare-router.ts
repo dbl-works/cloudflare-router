@@ -17,7 +17,7 @@ async function handleRequest(request: Request) {
   response = new Response(response.body, response);
 
   response.headers.set('Cache-Control', 'public, max-age=86400');
-  response.headers.set('squake-router-version', '0.2.14');
+  response.headers.set('squake-router-version', '0.2.15');
   return response;
 }
 
