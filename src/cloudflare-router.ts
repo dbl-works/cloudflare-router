@@ -10,14 +10,18 @@ async function handleRequest(request: Request) {
     cf: {
       // cf is Enterprise only feature
       cacheTtlByStatus: { '200-299': 86400, '404': 1, '500-599': 0 },
+      // The Cloudflare CDN does not cache HTML by default.
+      // WARNING: This is dangerous and might leak unwanted information to unauthorised user
+      // Just for the testing purpose on staging
+      cacheEverything: true,
       cacheKey: request.url
     }
   });
+
   // Reconstruct the Response object to make its headers mutable.
   response = new Response(response.body, response);
-
-  response.headers.set('Cache-Control', 'public, max-age=86400');
-  response.headers.set('squake-router-version', '0.2.15');
+  response.headers.set('Cache-Control', 'public, max-age=86400')
+  response.headers.set('squake-router-version', '0.2.17')
   return response;
 }
 
