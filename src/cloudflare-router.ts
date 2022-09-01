@@ -14,15 +14,27 @@ export const startWorker = (config: Config) => {
       const cache = (caches as Caches).default
       let response = await cache.match(request.url)
 
+
       if (!response) {
         response = await fetch(request)
         const headers = {
           ...response.headers,
+          'heeaders':
+          'squake-router-version': '0.3.0',
+          'squake-response': 'false',
           'cache-control': 'public, max-age=86400'
         }
         response = new Response(response.body, { ...response, headers })
         event.waitUntil(cache.put(request.url, response.clone()))
+      } else {
+        const headers = {
+          ...response.headers,
+          'squake-router-version': '0.3.0',
+          'squake-response': 'true',
+        }
+        response = new Response(response.body, { ...response, headers })
       }
+
       return response
     })
   })
