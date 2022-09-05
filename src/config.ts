@@ -33,11 +33,11 @@ export interface Deployment {
 export interface Config {
   deployments: Deployment[]
   routes: Routes
-  cacheTtl: number
+  edgeCacheTtl: number
 }
 
 export const DEFAULT_CONFIG: Config = {
   deployments: [],
   routes: {},
-  cacheTtl: 86400
+  edgeCacheTtl: 86400
 }
