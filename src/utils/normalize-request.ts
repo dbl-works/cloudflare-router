@@ -38,6 +38,7 @@ export default function normalizeRequest(request: Request, routes: Config['route
       if (url.indexOf('https://') !== 0) {
         url = 'https://' + url
       }
+      console.log('path', `${originalUrl} => ${url}`)
       return new Request(url)
     }
   }
