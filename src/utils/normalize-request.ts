@@ -6,7 +6,7 @@ const hasMediaFileExtension = (path: string): boolean => {
   return ext ? MEDIA_FILE_EXTENSIONS.includes(ext) : false
 }
 
-export default function normalizeRequest(request: Request, routes: Config['routes']): Request {
+export default function normalizeRequest(request: Request, routes: Config['routes']): { request: Request, cache: boolean } {
   const originalUrl = request.url
   const originalUrlWithoutScheme = originalUrl.replace(/^https?:\/\//, '')
   const path = originalUrlWithoutScheme.replace(/^.*?\//gi, '')
@@ -39,9 +39,10 @@ export default function normalizeRequest(request: Request, routes: Config['route
         url = 'https://' + url
       }
       console.log('path', `${originalUrl} => ${url}`)
-      return new Request(url)
+      // Make sure we only cache requests from S3 bucket
+      return { request: new Request(url), cache: true }
     }
   }
 
-  return request
+  return { request, cache: false }
 }
