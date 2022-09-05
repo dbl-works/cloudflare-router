@@ -8,7 +8,11 @@ async function handleRequest(request: Request) {
     // or configured behavior. Setting Cloudflare cache rules to further customised the behavior
     //@ts-ignore
     cf: {
-      // cf is Enterprise only feature
+      // NOTE: cf is Enterprise only feature
+      // This is equivalent to setting two Page Rules: Edge Cache TTL and Cache Level (to Cache Everything).
+      // The value must be zero or a positive number.
+      // A value of 0 indicates that the cache asset expires immediately.
+      // This option applies to GET and HEAD request methods only.
       cacheTtlByStatus: { '200-299': 86400, '404': 1, '500-599': 0 },
       // The Cloudflare CDN does not cache HTML by default.
       // WARNING: This is dangerous and might leak unwanted information to unauthorised user
