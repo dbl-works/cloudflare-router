@@ -39,7 +39,7 @@ export default function normalizeRequest(request: Request, routes: Config['route
         url = 'https://' + url
       }
       console.log('path', `${originalUrl} => ${url}`)
-      // Make sure we only cache requests from S3 bucket
+      // Make sure we only cache requests from the stated routes
       return { request: new Request(url), cache: true }
     }
   }

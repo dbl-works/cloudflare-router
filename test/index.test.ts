@@ -4,6 +4,7 @@ import { Config } from '../src/config'
 const TEST_CONFIG: Config = {
   deployments: [],
   routes: {},
+  edgeCacheTtl: 360
 }
 
 // Figure out how to mock the request

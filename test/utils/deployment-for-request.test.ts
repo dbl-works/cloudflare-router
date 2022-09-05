@@ -23,6 +23,7 @@ test('it finds a deployment for matching request', () => {
       MOCK_DEPLOYMENT_1,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
 
   const deployment = deploymentForRequest(request, config)
@@ -36,6 +37,7 @@ test('it finds a deployment for matching subdomain', () => {
       MOCK_DEPLOYMENT_1,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
 
   const deployment = deploymentForRequest(request, config)
@@ -49,6 +51,7 @@ test('it returns undefined when there is no matching request', () => {
       MOCK_DEPLOYMENT_1,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
 
   const deployment = deploymentForRequest(request, config)
