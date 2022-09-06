@@ -24,7 +24,6 @@ export default async function handleRequest(request: Request, edgeCacheTtl: numb
   // Reconstruct the Response object to make its headers mutable.
   response = new Response(response.body, response);
   response.headers.set('edge-cache-ttl', `${edgeCacheTtl}`)
-  response.headers.set('squake-router-version', '0.2.25')
   return response;
 }
 
