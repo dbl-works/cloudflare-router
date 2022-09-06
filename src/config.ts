@@ -33,9 +33,11 @@ export interface Deployment {
 export interface Config {
   deployments: Deployment[]
   routes: Routes
+  edgeCacheTtl: number
 }
 
 export const DEFAULT_CONFIG: Config = {
   deployments: [],
   routes: {},
+  edgeCacheTtl: 86400
 }

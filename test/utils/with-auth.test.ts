@@ -31,6 +31,7 @@ test('it calls the callback when no deployments are defined', () => {
   const config: Config = {
     deployments: [],
     routes: {},
+    edgeCacheTtl: 360
   }
   withAuth(event, config, callback)
   expect(callback).toHaveBeenCalled()
@@ -48,6 +49,7 @@ test('it calls the callback when request method is options', () => {
       MOCK_DEPLOYMENT_WITH_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   withAuth(event, config, callback)
   expect(callback).toHaveBeenCalled()
@@ -63,6 +65,7 @@ test('it calls the callback when a deployment is matched without auth', () => {
       MOCK_DEPLOYMENT_WITHOUT_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   withAuth(event, config, callback)
   expect(callback).toHaveBeenCalled()
@@ -78,6 +81,7 @@ test('it does not call callback when there is no matching deployment', async () 
       MOCK_DEPLOYMENT_WITH_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
@@ -95,6 +99,7 @@ test('it does not call the callback when auth is required but missing', async ()
       MOCK_DEPLOYMENT_WITH_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
@@ -116,6 +121,7 @@ test('it does not call the callback when auth is required but username is incorr
       MOCK_DEPLOYMENT_WITH_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
@@ -137,6 +143,7 @@ test('it does not call the callback when auth is required but password is incorr
       MOCK_DEPLOYMENT_WITH_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   const { response } = await withAuth(event, config, callback)
   expect(response.status).toBe(401)
@@ -158,6 +165,7 @@ test('it calls callback when auth is required and valid', () => {
       MOCK_DEPLOYMENT_WITH_AUTH,
     ],
     routes: {},
+    edgeCacheTtl: 360
   }
   withAuth(event, config, callback)
   expect(callback).toHaveBeenCalled()

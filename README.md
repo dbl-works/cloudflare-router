@@ -13,6 +13,7 @@ startWorker({
   routes: {
     'example.com': 's3://eu-central-1.assets.example.com',
   },
+  edgeCacheTtl: 360 // seconds, Edge Cache TTL (Time to Live) specifies how long to cache a resource in the Cloudflare edge network
 })
 ```
 
