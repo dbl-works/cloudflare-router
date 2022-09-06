@@ -38,7 +38,6 @@ export default function normalizeRequest(request: Request, routes: Config['route
       if (url.indexOf('https://') !== 0) {
         url = 'https://' + url
       }
-      console.log('path', `${originalUrl} => ${url}`)
       // Make sure we only cache requests from the stated routes
       return { request: new Request(url), cache: true }
     }
