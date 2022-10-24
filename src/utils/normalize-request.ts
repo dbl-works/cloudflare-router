@@ -39,9 +39,11 @@ export default function normalizeRequest(request: Request, routes: Config['route
         url = 'https://' + url
       }
       // Make sure we only cache requests from the stated routes
+      console.log(`Redirect from ${originalUrl} to cached url ${url}`)
       return { request: new Request(url), cache: true }
     }
   }
 
+  console.log("Original URL:", originalUrl)
   return { request, cache: false }
 }
