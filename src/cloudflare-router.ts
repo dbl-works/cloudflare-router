@@ -9,7 +9,7 @@ export const startWorker = (config: Config) => {
       const { request, cache }= normalizeRequest(event.request, config.routes)
       const edgeCacheTtl = cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0
 
-      const origin = request.headers.get('origin')
+      const origin = event.request.headers.get('origin')
       const headers: Headers | {} = origin ? { origin } : {}
 
       return handleRequest(request, edgeCacheTtl, headers)
