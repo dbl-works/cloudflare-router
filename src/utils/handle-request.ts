@@ -1,4 +1,6 @@
-export default async function handleRequest(request: Request, edgeCacheTtl: number, origin: string) {
+import { Headers } from './../types'
+
+export default async function handleRequest(request: Request, edgeCacheTtl: number, headers: Headers) {
   const cf = edgeCacheTtl && edgeCacheTtl > 0 ? {
     // Requests proxied through Cloudflare are cached even without Workers according to a zone’s default
     // or configured behavior. Setting Cloudflare cache rules to further customised the behavior
@@ -15,8 +17,6 @@ export default async function handleRequest(request: Request, edgeCacheTtl: numb
     cacheEverything: true,
     cacheKey: request.url
   } : {}
-
-  const headers = origin ? { origin } : {}
 
   //@ts-ignore
   const originalResponse = await fetch(request, { cf, headers });
