@@ -16,7 +16,7 @@ export type IPAuthMethod = {
   allow: string[],
 }
 
-export type AuthMethods = BasicAuthMethod | IPAuthMethod
+type AuthMethods = BasicAuthMethod | IPAuthMethod
 
 export interface Routes {
   [match: string]: string
