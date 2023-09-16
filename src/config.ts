@@ -5,18 +5,18 @@ interface Route {
 
 type RouteHandler = (request: Request) => Response
 
-type BasicAuthMethod = {
+export type BasicAuthMethod = {
   type: 'basic'
   username: string
   password: string
 }
 
-type IPAuthMethod = {
+export type IPAuthMethod = {
   type: 'ip',
   allow: string[],
 }
 
-type AuthMethods = BasicAuthMethod | IPAuthMethod
+export type AuthMethods = BasicAuthMethod | IPAuthMethod
 
 export interface Routes {
   [match: string]: string
@@ -33,7 +33,7 @@ export interface Deployment {
 export interface Config {
   deployments: Deployment[]
   routes: Routes
-  edgeCacheTtl: number
+  edgeCacheTtl?: number
 }
 
 export const DEFAULT_CONFIG: Config = {
