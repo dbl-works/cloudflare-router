@@ -6,7 +6,11 @@ type RespondWithResponse = Promise<{ response: Response }>
 
 const getCredentialsFromAuthorizationHeader = (authorizationHeader: string | undefined | null) => {
   const encoded = (authorizationHeader || '').replace('Basic ', '')
-  const decoded = Buffer.from(encoded, 'base64').toString().split(':')
+  const buffer = Uint8Array.from(atob(encoded), (character) =>
+    character.charCodeAt(0)
+  );
+  const decoded = new TextDecoder().decode(buffer).normalize().toString().split(':');
+
   return {
     username: decoded[0],
     password: decoded[1],
