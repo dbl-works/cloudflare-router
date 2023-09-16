@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "test": "jest test/*.test.ts test/**/*.test.ts --coverage"
+    "test": "yarn build && jest test/*.test.ts test/**/*.test.ts --coverage"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^3.0.0",
