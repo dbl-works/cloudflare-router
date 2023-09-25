@@ -16,8 +16,6 @@ const MOCK_DEPLOYMENT_WITH_AUTH: Deployment = {
   ],
 }
 const MOCK_DEPLOYMENT_WITHOUT_AUTH: Deployment = {
-  accountId: '12345',
-  zoneId: '12345',
   routes: [
     '*example.com/*',
   ],

@@ -1,47 +1,37 @@
-import { Config } from '../config'
+import { Config } from '../config';
 
-const MEDIA_FILE_EXTENSIONS = 'css gif ico jpg js otf jpeg png svg ttf webp woff woff2 csv json'.split(' ')
-const hasMediaFileExtension = (path: string): boolean => {
-  const ext = path.split('.').pop()?.toLowerCase()
-  return ext ? MEDIA_FILE_EXTENSIONS.includes(ext) : false
-}
+const MEDIA_FILE_EXTENSIONS = new Set('css gif ico jpg js otf jpeg png svg ttf webp woff woff2 csv json'.split(' '));
+
+const hasMediaFileExtension = (path: string): boolean => MEDIA_FILE_EXTENSIONS.has(path.split('.').pop()?.toLowerCase() || '');
+
 
 export default function normalizeRequest(request: Request, routes: Config['routes']): { request: Request, cache: boolean } {
-  const originalUrl = request.url
-  const originalUrlWithoutScheme = originalUrl.replace(/^https?:\/\//, '')
-  const path = originalUrlWithoutScheme.replace(/^.*?\//gi, '')
+  const url = new URL(request.url);
+  const originalUrlWithoutScheme = url.hostname + url.pathname;
+  const path = originalUrlWithoutScheme.replace(/^.*?\//gi, '');
 
-  for (const [key, value] of Object.entries(routes)) {
-    let url = originalUrl
-    let newUrl = value
-    if (url.indexOf(key) !== -1) {
-
-      if (originalUrlWithoutScheme.startsWith(key) === false && key.startsWith('/') === false) {
-        break
-      }
-
-      const singlePageApp = newUrl.indexOf('s3://') === 0
-      const isMediaFile = hasMediaFileExtension(originalUrl)
+  for (const [route, replacement] of Object.entries(routes)) {
+    if (request.url.includes(route) && (originalUrlWithoutScheme.startsWith(route) || route.startsWith('/'))) {
+      let newUrl = replacement;
+      const singlePageApp = newUrl.startsWith('s3://');
+  
+      const isMediaFile = hasMediaFileExtension(request.url)
       if (singlePageApp) {
         newUrl = newUrl.replace(new RegExp('s3://([^.]+).([^/]+)(/?)(.*)'), 'https://s3.$1.amazonaws.com/$2$3$4')
       }
 
-      const lastChar = newUrl[newUrl.length - 1]
-      url = originalUrlWithoutScheme.replace(key, newUrl)
-      // console.log(path, { singlePageApp, isMediaFile })
+      let updatedUrl = originalUrlWithoutScheme.replace(route, newUrl)
       if (singlePageApp && !isMediaFile) {
-        url = newUrl + '/index.html'
+        updatedUrl = newUrl + '/index.html'
       }
-      if (lastChar === '/') {
-        url = url + path
+      updatedUrl += newUrl.endsWith('/') ? updatedUrl + path : ''
+      if (!updatedUrl.startsWith('https://')) {
+        updatedUrl = 'https://' + updatedUrl
       }
-      if (url.indexOf('https://') !== 0) {
-        url = 'https://' + url
-      }
-      // Make sure we only cache requests from the stated routes
-      return { request: new Request(url), cache: true }
+
+      return { request: new Request(updatedUrl), cache: true };
     }
   }
 
-  return { request, cache: false }
+  return { request, cache: false };
 }

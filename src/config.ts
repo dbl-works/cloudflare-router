@@ -24,8 +24,8 @@ export interface Routes {
 }
 
 export interface Deployment {
-  accountId: string
-  zoneId: string
+  accountId?: string
+  zoneId?: string
   routes: string[]
   auth?: AuthMethods[]
 }
