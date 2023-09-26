@@ -1,10 +1,3 @@
-interface Route {
-  remote: string
-  spa?: boolean
-}
-
-type RouteHandler = (request: Request) => Response
-
 export type BasicAuthMethod = {
   type: 'basic'
   username: string

@@ -8,8 +8,14 @@ export default async function handleRequest(request: Request, edgeCacheTtl: numb
     }
   } : {}
 
-  //@ts-ignore
-  let response = new Response(await fetch(request, cfOptions));
+  const fetchResponse = await fetch(request, cfOptions);
+  const responseBodyBlob = await fetchResponse.blob();
+
+  const response = new Response(responseBodyBlob, {
+    status: fetchResponse.status,
+    statusText: fetchResponse.statusText,
+    headers: fetchResponse.headers,
+  });
 
   if (edgeCacheTtl > 0) { // Only set the header if edgeCacheTtl is set
     response.headers.set('edge-cache-ttl', `${edgeCacheTtl}`);
