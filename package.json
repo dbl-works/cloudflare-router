@@ -17,11 +17,11 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
   },
   "eslintConfig": {
-		"root": true,
-		"extends": [
-			"typescript",
-			"prettier"
-		],
+    "root": true,
+    "extends": [
+      "typescript",
+      "prettier"
+    ],
     "parserOptions": {
       "ecmaVersion": 8,
       "sourceType": "module"
@@ -30,16 +30,16 @@
       "node": true,
       "es6": true
     }
-	},
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^3.0.0",
-    "@types/jest": "^27.0.2",
+    "@types/jest": "^29.5.5",
     "@types/node-fetch": "^3.0.3",
-		"@typescript-eslint/eslint-plugin": "^5.32.0",
-		"@typescript-eslint/parser": "^5.32.0",
-		"eslint": "^8.50.0",
-		"eslint-config-prettier": "^8.5.0",
-		"eslint-config-typescript": "^3.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.32.0",
+    "@typescript-eslint/parser": "^5.32.0",
+    "eslint": "^8.50.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-config-typescript": "^3.0.0",
     "jest": "^27.5.1",
     "jest-environment-miniflare": "^2.14.1",
     "jest-fetch-mock": "^3.0.3",

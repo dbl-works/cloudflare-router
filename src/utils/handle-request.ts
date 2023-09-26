@@ -8,7 +8,7 @@ export default async function handleRequest(request: Request, edgeCacheTtl: numb
     }
   } : {}
 
-  const fetchResponse = await fetch(request, cfOptions);
+  const fetchResponse = await fetch(request, cfOptions as RequestInit);
   const responseBodyBlob = await fetchResponse.blob();
 
   const response = new Response(responseBodyBlob, {
