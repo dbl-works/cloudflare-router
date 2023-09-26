@@ -8,7 +8,10 @@ Easily manage routing using Cloudflare Workers
 # wrangler.toml
 name = "my-worker"
 routes = [
-  { pattern = "*example.com/*", zone_id = "5d7a8c0f96213b4e1a57b0c2f9478ec3" },
+  {
+    pattern = "*example.com/*",
+    zone_id = "5d7a8c0f96213b4e1a57b0c2f9478ec3"
+  },
 ]
 ```
 
