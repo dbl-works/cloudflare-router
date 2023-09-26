@@ -1,7 +1,22 @@
 import { Config } from '../config';
 
-const MEDIA_FILE_EXTENSIONS = new Set('css gif ico jpg js otf jpeg png svg ttf webp woff woff2 csv json'.split(' '));
-
+const MEDIA_FILE_EXTENSIONS = new Set([
+  'css',
+  'csv',
+  'gif',
+  'ico',
+  'jpeg',
+  'jpg',
+  'js',
+  'json',
+  'otf',
+  'png',
+  'svg',
+  'ttf',
+  'webp',
+  'woff',
+  'woff2',
+]);
 const hasMediaFileExtension = (path: string): boolean => MEDIA_FILE_EXTENSIONS.has(path.split('.').pop()?.toLowerCase() || '');
 
 
