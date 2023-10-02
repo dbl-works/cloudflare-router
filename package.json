@@ -1,16 +1,13 @@
 {
   "name": "cloudflare-router",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "main": "dist/index.js",
   "description": "Cloudflare Router",
   "homepage": "https://github.com/dbl-works/cloudflare-router#readme",
   "bugs": {
     "url": "https://github.com/dbl-works/cloudflare-router/issues"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/dbl-works/cloudflare-router.git"
-  },
+  "repository": "git+https://github.com/dbl-works/cloudflare-router.git",
   "scripts": {
     "build": "rm -rf dist && tsc",
     "test": "yarn build && jest test/*.test.ts test/**/*.test.ts --coverage",
@@ -33,6 +30,9 @@
     }
   },
   "release-it": {
+    "git": {
+      "requireCleanWorkingDir": false
+    },
     "github": {
       "release": true
     }
