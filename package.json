@@ -14,7 +14,8 @@
   "scripts": {
     "build": "rm -rf dist && tsc",
     "test": "yarn build && jest test/*.test.ts test/**/*.test.ts --coverage",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "release": "release-it"
   },
   "eslintConfig": {
     "root": true,
@@ -31,6 +32,11 @@
       "es6": true
     }
   },
+  "release-it": {
+    "github": {
+      "release": true
+    }
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^3.0.0",
     "@types/jest": "^29.5.5",
@@ -43,6 +49,7 @@
     "jest": "^27.5.1",
     "jest-environment-miniflare": "^2.14.1",
     "jest-fetch-mock": "^3.0.3",
+    "release-it": "^16.2.1",
     "ts-jest": "^27.0.7",
     "ts-loader": "^9.2.6",
     "typescript": "^4.4.4"
