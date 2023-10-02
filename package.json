@@ -55,6 +55,6 @@
     "typescript": "^4.4.4"
   },
   "publishConfig": {
-    "@dbl-works:registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com/dbl-works"
   }
 }
