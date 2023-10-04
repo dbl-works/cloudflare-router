@@ -52,3 +52,8 @@ startWorker({
   },
 })
 ```
+
+
+## Releases
+
+In order to cut a release simply invoke `yarn release`. This will bump the version, update the changelog and push a new tag to the repo. The release will be automatically published to npm.
