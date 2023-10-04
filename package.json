@@ -1,6 +1,8 @@
 {
-  "name": "cloudflare-router",
+  "name": "@dbl-works/cloudflare-router",
+  "author": "dbl-works",
   "version": "0.2.0",
+  "license": "MIT",
   "main": "dist/index.js",
   "description": "Cloudflare Router",
   "homepage": "https://github.com/dbl-works/cloudflare-router#readme",
@@ -34,6 +36,6 @@
     "release-it": "^16.2.1"
   },
   "publishConfig": {
-    "@dbl-works:registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com"
   }
 }
