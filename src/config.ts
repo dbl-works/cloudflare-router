@@ -1,10 +1,3 @@
-interface Route {
-  remote: string
-  spa?: boolean
-}
-
-type RouteHandler = (request: Request) => Response
-
 export type BasicAuthMethod = {
   type: 'basic'
   username: string
@@ -24,8 +17,8 @@ export interface Routes {
 }
 
 export interface Deployment {
-  accountId: string
-  zoneId: string
+  accountId?: string
+  zoneId?: string
   routes: string[]
   auth?: AuthMethods[]
 }
