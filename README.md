@@ -45,3 +45,9 @@ startWorker({
 
 - Starting with `/` does a path only match
 - Any other start will assume matching against `[domain][path]` as the value
+
+## Releases
+
+- [Make sure you're logged in to npm.](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-with-a-personal-access-token)
+- Switch to a branch named `chore/release/X.X.X` and make sure the changelog is up to date.
+- In order to cut a release invoke `yarn release`. This will bump the version, update the changelog and push a new tag to the repo. The release will be automatically published to npm.
