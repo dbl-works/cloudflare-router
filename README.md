@@ -52,3 +52,10 @@ startWorker({
   },
 })
 ```
+
+
+## Releases
+
+- [Make sure you're logged in to npm with an account that has access to the @dbl-works scope](https://docs.npmjs.com/cli/adduser.html)
+- Switch to a branch named `chore/release/X.X.X` and make sure the changelog is up to date.
+- In order to cut a release invoke `yarn release`. This will bump the version, update the changelog and push a new tag to the repo. The release will be automatically published to npm.
