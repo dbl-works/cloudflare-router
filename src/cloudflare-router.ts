@@ -8,7 +8,11 @@ export const startWorker = (config: Config) => {
     withAuth(event, config, async () => {
       const { request, cache }= normalizeRequest(event.request, config.routes, config.isS3Site)
       const edgeCacheTtl = cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0
-      return handleRequest(request, edgeCacheTtl)
+
+      const origin = event.request.headers.get('origin')
+      const headers: Headers | {} = origin ? { origin } : {}
+
+      return handleRequest(request, edgeCacheTtl, headers)
     })
   })
 }
