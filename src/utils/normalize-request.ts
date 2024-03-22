@@ -6,7 +6,7 @@ const hasMediaFileExtension = (path: string): boolean => {
   return ext ? MEDIA_FILE_EXTENSIONS.includes(ext) : false
 }
 
-export default function normalizeRequest(request: Request, routes: Config['routes']): { request: Request, cache: boolean } {
+export default function normalizeRequest(request: Request, routes: Config['routes'], isS3Site: boolean = true): { request: Request, cache: boolean } {
   const originalUrl = request.url
   const originalUrlWithoutScheme = originalUrl.replace(/^https?:\/\//, '')
   const path = originalUrlWithoutScheme.replace(/^.*?\//gi, '')
@@ -20,15 +20,15 @@ export default function normalizeRequest(request: Request, routes: Config['route
         break
       }
 
-      const singlePageApp = newUrl.indexOf('s3://') === 0
+      const singlePageApp = isS3Site ? newUrl.indexOf('s3://') === 0 : true
+      console.log('singlePageApp', singlePageApp)
       const isMediaFile = hasMediaFileExtension(originalUrl)
-      if (singlePageApp) {
+      if (singlePageApp && isS3Site) {
         newUrl = newUrl.replace(new RegExp('s3://([^.]+).([^/]+)(/?)(.*)'), 'https://s3.$1.amazonaws.com/$2$3$4')
       }
 
       const lastChar = newUrl[newUrl.length - 1]
       url = originalUrlWithoutScheme.replace(key, newUrl)
-      // console.log(path, { singlePageApp, isMediaFile })
       if (singlePageApp && !isMediaFile) {
         url = newUrl + '/index.html'
       }
@@ -38,6 +38,8 @@ export default function normalizeRequest(request: Request, routes: Config['route
       if (url.indexOf('https://') !== 0) {
         url = 'https://' + url
       }
+
+      console.log('URL', url)
       // Make sure we only cache requests from the stated routes
       return { request: new Request(url), cache: true }
     }
