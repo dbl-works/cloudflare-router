@@ -35,7 +35,7 @@ test('maps subpath js file to s3 bucket subpath', () => {
 
 test('maps js to s3 bucket root', () => {
   const { request, cache } = normalizeRequest(new Request('https://cdn.example.com/some/file.js'), TEST_ROUTES)
-  expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/cdn.example.com/some/file.js')
+  expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/bucket-name/public/some/file.js')
   expect(cache).toEqual(true)
 })
 
