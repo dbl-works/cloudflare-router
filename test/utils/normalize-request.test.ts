@@ -5,7 +5,7 @@ const TEST_ROUTES = {
   'example.com/admin': 'https://s3.eu-central-1.amazonaws.com/assets.example.com/admin',
   'dashboard.example.com': 's3://eu-central-1.assets.example.com/dashboard',
   'fonts.example.com': 's3://us-east-1.fonts.example.com',
-  'cdn.example.com': 'https://s3.eu-central-1.amazonaws.com/cdn.example.com',
+  'cdn.example.com': 's3://eu-central-1.bucket-name/public',
   '/old-path': '/new-path',
 }
 
