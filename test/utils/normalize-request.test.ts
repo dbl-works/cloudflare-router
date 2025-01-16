@@ -5,7 +5,7 @@ const TEST_ROUTES = {
   'example.com/admin': 'https://s3.eu-central-1.amazonaws.com/assets.example.com/admin',
   'dashboard.example.com': 's3://eu-central-1.assets.example.com/dashboard',
   'fonts.example.com': 's3://us-east-1.fonts.example.com',
-  'cdn.example.com': 'https://s3.eu-central-1.amazonaws.com/cdn.example.com',
+  'cdn.example.com': 's3://eu-central-1.bucket-name/public',
   '/old-path': '/new-path',
 }
 
@@ -35,7 +35,7 @@ test('maps subpath js file to s3 bucket subpath', () => {
 
 test('maps js to s3 bucket root', () => {
   const { request, cache } = normalizeRequest(new Request('https://cdn.example.com/some/file.js'), TEST_ROUTES)
-  expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/cdn.example.com/some/file.js')
+  expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/bucket-name/public/some/file.js')
   expect(cache).toEqual(true)
 })
 
@@ -72,5 +72,11 @@ test('forwards original request when domain is not exact match', () => {
 test('simple path replace', () => {
   const { request, cache } = normalizeRequest(new Request('https://example.com/old-path'), TEST_ROUTES)
   expect(request.url).toEqual('https://example.com/new-path')
+  expect(cache).toEqual(true)
+})
+
+test('maps pdf to s3 bucket location', () => {
+  const { request, cache } = normalizeRequest(new Request('https://cdn.example.com/some/file.pdf'), TEST_ROUTES)
+  expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/bucket-name/public/some/file.pdf')
   expect(cache).toEqual(true)
 })
