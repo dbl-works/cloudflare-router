@@ -74,3 +74,9 @@ test('simple path replace', () => {
   expect(request.url).toEqual('https://example.com/new-path')
   expect(cache).toEqual(true)
 })
+
+test('maps pdf to s3 bucket location', () => {
+  const { request, cache } = normalizeRequest(new Request('https://cdn.example.com/some/file.pdf'), TEST_ROUTES)
+  expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/bucket-name/public/some/file.pdf')
+  expect(cache).toEqual(true)
+})
