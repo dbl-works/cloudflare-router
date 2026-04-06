@@ -1,10 +1,3 @@
-interface Route {
-  remote: string
-  spa?: boolean
-}
-
-type RouteHandler = (request: Request) => Response
-
 export type BasicAuthMethod = {
   type: 'basic'
   username: string
@@ -12,16 +5,13 @@ export type BasicAuthMethod = {
 }
 
 export type IPAuthMethod = {
-  type: 'ip',
-  allow: string[],
+  type: 'ip'
+  allow: string[]
 }
 
 type AuthMethods = BasicAuthMethod | IPAuthMethod
 
-export interface Routes {
-  [match: string]: string
-  // [match: string]: string | Route | RouteHandler // TOOO: Add support for handlers and objects
-}
+export type Routes = Record<string, string>
 
 export interface Deployment {
   accountId: string
@@ -40,5 +30,5 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   deployments: [],
   routes: {},
-  edgeCacheTtl: 86400
+  edgeCacheTtl: 86400,
 }

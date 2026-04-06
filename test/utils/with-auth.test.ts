@@ -1,3 +1,4 @@
+import { test, expect, vi } from 'vitest'
 import { withAuth } from '../../src/utils/with-auth'
 import { Config, Deployment } from '../../src/config'
 
@@ -23,26 +24,23 @@ const MOCK_DEPLOYMENT_WITHOUT_AUTH: Deployment = {
   ],
 }
 
-test('it calls the callback when no deployments are defined', () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets')
-  })
+test('it calls the callback when no deployments are defined', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets')
+
   const config: Config = {
     deployments: [],
     routes: {},
     edgeCacheTtl: 360
   }
-  withAuth(event, config, callback)
+  await withAuth(request, config, callback)
   expect(callback).toHaveBeenCalled()
 })
 
-test('it calls the callback when request method is options', () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets', {
-      method: 'OPTIONS',
-    })
+test('it calls the callback when request method is options', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    method: 'OPTIONS',
   })
   const config: Config = {
     deployments: [
@@ -51,15 +49,13 @@ test('it calls the callback when request method is options', () => {
     routes: {},
     edgeCacheTtl: 360
   }
-  withAuth(event, config, callback)
+  await withAuth(request, config, callback)
   expect(callback).toHaveBeenCalled()
 })
 
-test('it calls the callback when a deployment is matched without auth', () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets')
-  })
+test('it calls the callback when a deployment is matched without auth', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets')
   const config: Config = {
     deployments: [
       MOCK_DEPLOYMENT_WITHOUT_AUTH,
@@ -67,15 +63,13 @@ test('it calls the callback when a deployment is matched without auth', () => {
     routes: {},
     edgeCacheTtl: 360
   }
-  withAuth(event, config, callback)
+  await withAuth(request, config, callback)
   expect(callback).toHaveBeenCalled()
 })
 
 test('it does not call callback when there is no matching deployment', async () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets')
-  })
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.co.uk/secrets')
   const config: Config = {
     deployments: [
       MOCK_DEPLOYMENT_WITH_AUTH,
@@ -83,17 +77,14 @@ test('it does not call callback when there is no matching deployment', async () 
     routes: {},
     edgeCacheTtl: 360
   }
-  const { response } = await withAuth(event, config, callback)
-  expect(response.status).toBe(401)
-  expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
+  const response = await withAuth(request, config, callback)
+  expect(response.status).toBe(404)
   expect(callback).not.toHaveBeenCalled()
 })
 
 test('it does not call the callback when auth is required but missing', async () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets')
-  })
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets')
   const config: Config = {
     deployments: [
       MOCK_DEPLOYMENT_WITH_AUTH,
@@ -101,20 +92,18 @@ test('it does not call the callback when auth is required but missing', async ()
     routes: {},
     edgeCacheTtl: 360
   }
-  const { response } = await withAuth(event, config, callback)
+  const response = await withAuth(request, config, callback)
   expect(response.status).toBe(401)
   expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 
 test('it does not call the callback when auth is required but username is incorrect', async () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets', {
-      headers: {
-        'Authorization': 'Basic dGVzdGVyOmxldG1laW4=', // tester:letmein
-      }
-    })
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: {
+      'Authorization': 'Basic dGVzdGVyOmxldG1laW4=', // tester:letmein
+    }
   })
   const config: Config = {
     deployments: [
@@ -123,20 +112,18 @@ test('it does not call the callback when auth is required but username is incorr
     routes: {},
     edgeCacheTtl: 360
   }
-  const { response } = await withAuth(event, config, callback)
+  const response = await withAuth(request, config, callback)
   expect(response.status).toBe(401)
   expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 
 test('it does not call the callback when auth is required but password is incorrect', async () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets', {
-      headers: {
-        'Authorization': 'Basic dGVzdDpsZXRtZW91dA==', // test:letmeout
-      }
-    })
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: {
+      'Authorization': 'Basic dGVzdDpsZXRtZW91dA==', // test:letmeout
+    }
   })
   const config: Config = {
     deployments: [
@@ -145,20 +132,18 @@ test('it does not call the callback when auth is required but password is incorr
     routes: {},
     edgeCacheTtl: 360
   }
-  const { response } = await withAuth(event, config, callback)
+  const response = await withAuth(request, config, callback)
   expect(response.status).toBe(401)
   expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
 })
 
-test('it calls callback when auth is required and valid', () => {
-  const callback = jest.fn()
-  const event = new FetchEvent('fetch', {
-    request: new Request('https://example.com/secrets', {
-      headers: {
-        'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein
-      }
-    })
+test('it calls callback when auth is required and valid', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: {
+      'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein
+    }
   })
   const config: Config = {
     deployments: [
@@ -167,6 +152,6 @@ test('it calls callback when auth is required and valid', () => {
     routes: {},
     edgeCacheTtl: 360
   }
-  withAuth(event, config, callback)
+  await withAuth(request, config, callback)
   expect(callback).toHaveBeenCalled()
 })

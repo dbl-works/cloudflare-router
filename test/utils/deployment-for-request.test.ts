@@ -1,3 +1,4 @@
+import { test, expect } from 'vitest'
 import { Config, Deployment } from '../../src/config'
 import { deploymentForRequest } from '../../src/utils/deployment-for-request'
 

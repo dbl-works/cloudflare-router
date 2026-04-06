@@ -1,20 +1,22 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es5",
-    "lib": ["es2015", "webworker"],
-    "jsx": "react",
+    "module": "es2022",
+    "target": "es2022",
+    "lib": ["es2022", "webworker"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "strict": true,
     "noImplicitAny": true,
     "preserveConstEnums": true,
     "outDir": "./dist",
-    "moduleResolution": "node"
+    "moduleResolution": "bundler"
   },
   "include": [
     "index.ts",
     "src/*.ts",
     "src/**/*.ts",
     "test/*.ts",
-    "test/**/*.ts",
+    "test/**/*.ts"
   ]
 }

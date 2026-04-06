@@ -1,4 +1,5 @@
-import { startWorker } from '../src/cloudflare-router'
+import { test, expect } from 'vitest'
+import { createRouter } from '../src/cloudflare-router'
 import { Config } from '../src/config'
 
 const TEST_CONFIG: Config = {
@@ -7,8 +8,7 @@ const TEST_CONFIG: Config = {
   edgeCacheTtl: 360
 }
 
-// Figure out how to mock the request
 test('it works', () => {
-  const response = startWorker(TEST_CONFIG)
-  expect(response).not.toBeNull()
+  const router = createRouter(TEST_CONFIG)
+  expect(router.fetch).toBeDefined()
 })
