@@ -1,23 +1,19 @@
 # Cloudflare Router
 
-Easily manage routing using Cloudflare Workers
-
-
+Easily manage routing using Cloudflare Workers with Edge caching and Authentication matching. Supported via the modern ES Modules framework for Cloudflare Workers.
 
 ## Usage
 
 ```typescript
-import { startWorker } from '@dbl-works/cloudflare-router'
+import { createRouter } from '@dbl-works/cloudflare-router'
 
-startWorker({
+export default createRouter({
   routes: {
     'example.com': 's3://eu-central-1.assets.example.com',
   },
   edgeCacheTtl: 360 // seconds, Edge Cache TTL (Time to Live) specifies how long to cache a resource in the Cloudflare edge network
 })
 ```
-
-
 
 ## Match rules
 
@@ -26,12 +22,14 @@ startWorker({
 
 
 
-## Basic Authentication
+## Basic Authentication & IP Restrictions
 
-You can protect a deployment by defining basic auth in the config.
+You can protect a deployment by defining basic auth or IP restrictions in the config.
 
 ```typescript
-startWorker({
+import { createRouter } from '@dbl-works/cloudflare-router'
+
+export default createRouter({
   deployments: [
     {
       accountId: '12345',
@@ -45,6 +43,12 @@ startWorker({
           username: 'test',
           password: 'letmein',
         },
+        {
+          type: 'ip',
+          allow: [
+            '192.168.1.1'
+          ],
+        }
       ],
     },
   ],

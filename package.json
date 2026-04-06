@@ -1,9 +1,17 @@
 {
   "name": "@dbl-works/cloudflare-router",
   "author": "dbl-works",
-  "version": "0.4.1",
+  "version": "1.0.0",
   "license": "MIT",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "description": "Cloudflare Router",
   "homepage": "https://github.com/dbl-works/cloudflare-router#readme",
   "bugs": {
@@ -12,7 +20,7 @@
   "repository": "git+https://github.com/dbl-works/cloudflare-router.git",
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "test": "yarn build && jest test/*.test.ts test/**/*.test.ts --coverage",
+    "test": "vitest run --coverage",
     "release": "release-it"
   },
   "release-it": {
@@ -24,16 +32,13 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.2.0",
-    "@types/jest": "^27.0.2",
-    "@types/node-fetch": "^3.0.3",
-    "jest": "^27.5.1",
-    "jest-environment-miniflare": "^2.14.1",
-    "jest-fetch-mock": "^3.0.3",
-    "ts-jest": "^27.0.7",
-    "ts-loader": "^9.2.6",
+    "@cloudflare/vitest-pool-workers": "^0.6.8",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@types/node": "^25.5.2",
+    "@vitest/coverage-v8": "^2.1.8",
+    "release-it": "^16.2.1",
     "typescript": "^5.7.3",
-    "release-it": "^16.2.1"
+    "vitest": "^2.1.8"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

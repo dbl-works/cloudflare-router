@@ -1,4 +1,6 @@
-dist
+dist/
+!dist/.keep
+
 node_modules
 coverage
 
