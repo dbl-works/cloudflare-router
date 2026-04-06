@@ -32,13 +32,13 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.6.8",
+    "@cloudflare/vitest-pool-workers": "^0.14.1",
     "@cloudflare/workers-types": "^4.20250109.0",
     "@types/node": "^25.5.2",
-    "@vitest/coverage-v8": "^2.1.8",
-    "release-it": "^16.2.1",
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "@vitest/coverage-v8": "^4.1.2",
+    "release-it": "^19.2.4",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
