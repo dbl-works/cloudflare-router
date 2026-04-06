@@ -10,7 +10,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "description": "Cloudflare Router",
   "homepage": "https://github.com/dbl-works/cloudflare-router#readme",
@@ -20,7 +20,7 @@
   "repository": "git+https://github.com/dbl-works/cloudflare-router.git",
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "test": "vitest run --coverage",
+    "test": "vitest run",
     "release": "release-it"
   },
   "release-it": {
@@ -35,7 +35,6 @@
     "@cloudflare/vitest-pool-workers": "^0.14.1",
     "@cloudflare/workers-types": "^4.20250109.0",
     "@types/node": "^25.5.2",
-    "@vitest/coverage-v8": "^4.1.2",
     "release-it": "^19.2.4",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
