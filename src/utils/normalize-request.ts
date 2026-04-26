@@ -1,8 +1,9 @@
 import { Config } from '../config'
 
 const MEDIA_FILE_EXTENSIONS = [
-  'css', 'csv', 'gif', 'ico', 'jpeg', 'jpg', 'js', 'json',
+  'css', 'csv', 'gif', 'ico', 'jpeg', 'jpg', 'js', 'json', 'map',
   'otf', 'pdf', 'png', 'svg', 'ttf', 'webp', 'woff', 'woff2',
+  'webmanifest', 'xml',
 ]
 const hasMediaFileExtension = (path: string): boolean => {
   const ext = path.split('.').pop()?.toLowerCase()

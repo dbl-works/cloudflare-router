@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 ### Added
 
+## [1.1.0] - 2026-04-26
+### Added
+- Add webmanifest, map and xml as media formats
+
 ## [1.0.0] - 2026-04-06
 ### Changed
 - **BREAKING**: Migrated to ES Module Worker syntax instead of legacy Service Worker (`addEventListener('fetch')`). Replaced `startWorker` with `createRouter` returning standard fetch handler `{ fetch() }`.
