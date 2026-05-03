@@ -12,3 +12,8 @@ test('it works', () => {
   const router = createRouter(TEST_CONFIG)
   expect(router.fetch).toBeDefined()
 })
+
+test('it works without deployments key', () => {
+  const router = createRouter({ routes: {}, edgeCacheTtl: 360 })
+  expect(router.fetch).toBeDefined()
+})

@@ -6,11 +6,16 @@ const getCredentialsFromAuthorizationHeader = (authorizationHeader: string | und
   const buffer = Uint8Array.from(atob(encoded), (character) =>
     character.charCodeAt(0)
   );
-  const decoded = new TextDecoder().decode(buffer).normalize().toString().split(':');
+  const decoded = new TextDecoder().decode(buffer).normalize();
+  const separatorIndex = decoded.indexOf(':');
+
+  if (separatorIndex === -1) {
+    return { username: decoded, password: '' };
+  }
 
   return {
-    username: decoded[0] || '',
-    password: decoded[1] || '',
+    username: decoded.slice(0, separatorIndex),
+    password: decoded.slice(separatorIndex + 1),
   }
 }
 
@@ -38,7 +43,7 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 export const withAuth = async (request: Request, config: Config, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
   // If no deployments are defined, then just allow all requests to passthrough
   // We also allow options requests here to get cors headers from origin
-  if (config.deployments.length === 0 || request.method === 'OPTIONS') {
+  if (!config.deployments?.length || request.method === 'OPTIONS') {
     return callback(request)
   }
 
