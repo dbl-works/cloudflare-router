@@ -80,7 +80,7 @@ export default function normalizeRequest(request: Request, routes: Config['route
       }
 
       // Make sure we only cache requests from the stated routes
-      return { request: new Request(url), cache: true }
+      return { request: new Request(url, request), cache: true }
     }
   }
 
