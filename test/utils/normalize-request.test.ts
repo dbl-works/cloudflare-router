@@ -116,3 +116,49 @@ test('works with Account Regional namespace bucket names', () => {
   expect(cache).toEqual(true)
 })
 
+// --- Request property preservation ---
+
+test('preserves HTTP method on matched route', () => {
+  const routes = { 'api.example.com': 'https://backend.example.com' }
+  const original = new Request('https://api.example.com/data', { method: 'POST' })
+  const { request } = normalizeRequest(original, routes, false)
+  expect(request.method).toEqual('POST')
+})
+
+test('preserves request headers on matched route', () => {
+  const routes = { 'api.example.com': 'https://backend.example.com' }
+  const original = new Request('https://api.example.com/data', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer token123' },
+  })
+  const { request } = normalizeRequest(original, routes, false)
+  expect(request.headers.get('Content-Type')).toEqual('application/json')
+  expect(request.headers.get('Authorization')).toEqual('Bearer token123')
+})
+
+test('preserves request body on matched route', async () => {
+  const routes = { 'api.example.com': 'https://backend.example.com' }
+  const body = JSON.stringify({ key: 'value' })
+  const original = new Request('https://api.example.com/data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  })
+  const { request } = normalizeRequest(original, routes, false)
+  const text = await request.text()
+  expect(text).toEqual(body)
+})
+
+// --- Route fallthrough (break vs continue) ---
+
+test('matches a later route when an earlier route is a partial substring match', () => {
+  // "example.com" is a substring of "api.example.com" but not a startsWith match,
+  // so the router should skip it and match the second route instead.
+  const routes = {
+    'example.com': 'https://frontend.example.com',
+    'api.example.com': 'https://backend.example.com',
+  }
+  const { request, cache } = normalizeRequest(new Request('https://api.example.com/data'), routes, false)
+  expect(request.url).toEqual('https://backend.example.com/index.html')
+  expect(cache).toEqual(true)
+})

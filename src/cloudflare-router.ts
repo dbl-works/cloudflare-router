@@ -7,10 +7,10 @@ import { compileDeployments } from './utils/deployment-for-request'
 
 export const createRouter = (config: Config) => {
   // Pre-compile URLPattern instances once at creation time
-  const compiledDeployments = compileDeployments(config.deployments)
+  const compiledDeployments = compileDeployments(config.deployments ?? [])
 
   return {
-    async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext): Promise<Response> {
+    async fetch(request: Request, _env: Record<string, unknown>, _ctx: ExecutionContext): Promise<Response> {
       return withAuth(request, config, compiledDeployments, async () => {
         const { request: normalizedReq, cache } = normalizeRequest(request, config.routes, config.isS3Site)
         const edgeCacheTtl = cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0
