@@ -6,11 +6,16 @@ const getCredentialsFromAuthorizationHeader = (authorizationHeader: string | und
   const buffer = Uint8Array.from(atob(encoded), (character) =>
     character.charCodeAt(0)
   );
-  const decoded = new TextDecoder().decode(buffer).normalize().toString().split(':');
+  const decoded = new TextDecoder().decode(buffer).normalize();
+  const separatorIndex = decoded.indexOf(':');
+
+  if (separatorIndex === -1) {
+    return { username: decoded, password: '' };
+  }
 
   return {
-    username: decoded[0] || '',
-    password: decoded[1] || '',
+    username: decoded.slice(0, separatorIndex),
+    password: decoded.slice(separatorIndex + 1),
   }
 }
 
