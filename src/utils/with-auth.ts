@@ -43,7 +43,7 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 export const withAuth = async (request: Request, config: Config, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
   // If no deployments are defined, then just allow all requests to passthrough
   // We also allow options requests here to get cors headers from origin
-  if (config.deployments.length === 0 || request.method === 'OPTIONS') {
+  if (!config.deployments?.length || request.method === 'OPTIONS') {
     return callback(request)
   }
 
