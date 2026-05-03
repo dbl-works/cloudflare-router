@@ -155,3 +155,47 @@ test('it calls callback when auth is required and valid', async () => {
   await withAuth(request, config, callback)
   expect(callback).toHaveBeenCalled()
 })
+
+// --- Password with colons (RFC 7617 allows colons in passwords) ---
+
+test('it authenticates when password contains colons', async () => {
+  const deployment = {
+    ...MOCK_DEPLOYMENT_WITH_AUTH,
+    auth: [{ type: 'basic' as const, username: 'test', password: 'pass:word' }],
+  }
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: {
+      'Authorization': 'Basic dGVzdDpwYXNzOndvcmQ=', // test:pass:word
+    }
+  })
+  const config: Config = {
+    deployments: [deployment],
+    routes: {},
+    edgeCacheTtl: 360
+  }
+  await withAuth(request, config, callback)
+  expect(callback).toHaveBeenCalled()
+})
+
+test('it rejects when password with colons does not match', async () => {
+  const deployment = {
+    ...MOCK_DEPLOYMENT_WITH_AUTH,
+    auth: [{ type: 'basic' as const, username: 'test', password: 'pass:word' }],
+  }
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: {
+      'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein (wrong password)
+    }
+  })
+  const config: Config = {
+    deployments: [deployment],
+    routes: {},
+    edgeCacheTtl: 360
+  }
+  const response = await withAuth(request, config, callback)
+  expect(response.status).toBe(401)
+  expect(callback).not.toHaveBeenCalled()
+})
+
