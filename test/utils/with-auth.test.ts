@@ -155,3 +155,104 @@ test('it calls callback when auth is required and valid', async () => {
   await withAuth(request, config, callback)
   expect(callback).toHaveBeenCalled()
 })
+
+// --- IP-based authentication ---
+
+const MOCK_DEPLOYMENT_WITH_IP_AUTH: Deployment = {
+  accountId: '12345',
+  zoneId: '12345',
+  routes: [
+    '*example.com/*',
+  ],
+  auth: [
+    {
+      type: 'ip',
+      allow: ['192.168.1.1', '10.0.0.1'],
+    },
+  ],
+}
+
+test('it calls callback when IP matches allow list', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: { 'CF-Connecting-IP': '192.168.1.1' },
+  })
+  const config: Config = {
+    deployments: [MOCK_DEPLOYMENT_WITH_IP_AUTH],
+    routes: {},
+    edgeCacheTtl: 360,
+  }
+  await withAuth(request, config, callback)
+  expect(callback).toHaveBeenCalled()
+})
+
+test('it rejects when IP does not match allow list', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: { 'CF-Connecting-IP': '172.16.0.1' },
+  })
+  const config: Config = {
+    deployments: [MOCK_DEPLOYMENT_WITH_IP_AUTH],
+    routes: {},
+    edgeCacheTtl: 360,
+  }
+  const response = await withAuth(request, config, callback)
+  expect(response.status).toBe(401)
+  expect(callback).not.toHaveBeenCalled()
+})
+
+test('it rejects when CF-Connecting-IP header is missing', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets')
+  const config: Config = {
+    deployments: [MOCK_DEPLOYMENT_WITH_IP_AUTH],
+    routes: {},
+    edgeCacheTtl: 360,
+  }
+  const response = await withAuth(request, config, callback)
+  expect(response.status).toBe(401)
+  expect(callback).not.toHaveBeenCalled()
+})
+
+// --- Mixed auth (IP + Basic) ---
+
+const MOCK_DEPLOYMENT_WITH_MIXED_AUTH: Deployment = {
+  accountId: '12345',
+  zoneId: '12345',
+  routes: ['*example.com/*'],
+  auth: [
+    { type: 'ip', allow: ['192.168.1.1'] },
+    { type: 'basic', username: 'test', password: 'letmein' },
+  ],
+}
+
+test('it authorizes via IP when mixed auth config and IP matches', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: { 'CF-Connecting-IP': '192.168.1.1' },
+  })
+  const config: Config = {
+    deployments: [MOCK_DEPLOYMENT_WITH_MIXED_AUTH],
+    routes: {},
+    edgeCacheTtl: 360,
+  }
+  await withAuth(request, config, callback)
+  expect(callback).toHaveBeenCalled()
+})
+
+test('it authorizes via basic auth when mixed auth config and IP does not match', async () => {
+  const callback = vi.fn().mockReturnValue(new Response('ok'))
+  const request = new Request('https://example.com/secrets', {
+    headers: {
+      'CF-Connecting-IP': '172.16.0.1',
+      'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein
+    },
+  })
+  const config: Config = {
+    deployments: [MOCK_DEPLOYMENT_WITH_MIXED_AUTH],
+    routes: {},
+    edgeCacheTtl: 360,
+  }
+  await withAuth(request, config, callback)
+  expect(callback).toHaveBeenCalled()
+})

@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-04-06
 ### Changed
 - **BREAKING**: Migrated to ES Module Worker syntax instead of legacy Service Worker (`addEventListener('fetch')`). Replaced `startWorker` with `createRouter` returning standard fetch handler `{ fetch() }`.
-- Upgraded tests to use Vitest (`@cloudflare/vitest-pool-workers`) alongside Node 18 requirements.
+- Upgraded tests to use Vitest (`@cloudflare/vitest-pool-workers`) alongside Node 22 requirements.
 - Configured proper Typescript definition emission (`index.d.ts`).
 - Switched to using `crypto.subtle.digest` for timing-safe Basic Auth credentials comparison.
 - Fixed IP authentication loop fallthrough bug which incorrectly permitted unauthorized traffic if a specific IP didn't match.
