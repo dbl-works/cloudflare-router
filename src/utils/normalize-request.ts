@@ -58,7 +58,7 @@ export default function normalizeRequest(request: Request, routes: Config['route
     if (url.indexOf(key) !== -1) {
 
       if (originalUrlWithoutScheme.startsWith(key) === false && key.startsWith('/') === false) {
-        break
+        continue
       }
 
       const singlePageApp = isS3Site ? newUrl.indexOf('s3://') === 0 : true
