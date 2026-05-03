@@ -1,12 +1,28 @@
-import { Config, Deployment } from '../config'
+import { Deployment } from '../config'
 
-export const deploymentForRequest = (request: Request, config: Config): Deployment | undefined => {
-  return config.deployments.find(deployment => {
-    return deployment.routes.find(route => {
-      const sanitizedRoute = route.replace(/[^a-zA-Z0-9*\.\-\/]/g, '') // We only really want to allow the pattern *.example.com/*
-      const regexedRoute = sanitizedRoute.replace(/\./g, '\\.').replace(/\*/g, '(.*)')
-      const normalizedUrl = request.url.replace(/https?:\/\//, '')
-      return normalizedUrl.match(new RegExp(`^${regexedRoute}$`))
-    })
-  })
+export interface CompiledDeployment {
+  deployment: Deployment
+  patterns: URLPattern[]
+}
+
+/**
+ * Pre-compiles deployment route patterns into URLPattern instances.
+ * Called once at router creation time to avoid per-request compilation.
+ */
+export const compileDeployments = (deployments: Deployment[]): CompiledDeployment[] => {
+  return deployments.map(deployment => ({
+    deployment,
+    patterns: deployment.routes.map(route => new URLPattern(route)),
+  }))
+}
+
+/**
+ * Finds the deployment matching the incoming request URL.
+ * Uses pre-compiled URLPattern instances for safe, fast matching.
+ */
+export const deploymentForRequest = (request: Request, compiledDeployments: CompiledDeployment[]): Deployment | undefined => {
+  const match = compiledDeployments.find(({ patterns }) =>
+    patterns.some(pattern => pattern.test(request.url))
+  )
+  return match?.deployment
 }
