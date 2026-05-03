@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { Config, Deployment } from '../../src/config'
+import { Deployment } from '../../src/config'
 import { compileDeployments, deploymentForRequest } from '../../src/utils/deployment-for-request'
 
 const MOCK_DEPLOYMENT_1: Deployment = {

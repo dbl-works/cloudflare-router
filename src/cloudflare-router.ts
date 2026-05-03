@@ -11,7 +11,7 @@ export const createRouter = (config: Config) => {
 
   return {
     async fetch(request: Request, _env: Record<string, unknown>, _ctx: ExecutionContext): Promise<Response> {
-      return withAuth(request, config, compiledDeployments, async () => {
+      return withAuth(request, compiledDeployments, async () => {
         const { request: normalizedReq, cache } = normalizeRequest(request, config.routes, config.isS3Site)
         const edgeCacheTtl = cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0
         return handleRequest(normalizedReq, edgeCacheTtl)

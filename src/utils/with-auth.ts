@@ -1,4 +1,3 @@
-import { Config } from '../config'
 import { CompiledDeployment, deploymentForRequest } from './deployment-for-request'
 
 const getCredentialsFromAuthorizationHeader = (authorizationHeader: string | undefined | null) => {
@@ -40,14 +39,14 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 }
 
 // Ensures requests are authenticated before executing the callback
-export const withAuth = async (request: Request, config: Config, compiledDeployments: CompiledDeployment[], callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
+export const withAuth = async (request: Request, compiledDeployments: CompiledDeployment[], callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
   // If no deployments are defined, then just allow all requests to passthrough
   // We also allow options requests here to get cors headers from origin
   if (compiledDeployments.length === 0 || request.method === 'OPTIONS') {
     return callback(request)
   }
 
-  // Look for a deployment to ensure we have a valid config
+  // Look for a deployment matching the incoming request URL
   const deployment = deploymentForRequest(request, compiledDeployments)
   if (deployment === undefined) {
     return new Response('Unknown deployment', { status: 404 })

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest'
 import { withAuth } from '../../src/utils/with-auth'
-import { Config, Deployment } from '../../src/config'
+import { Deployment } from '../../src/config'
 import { compileDeployments } from '../../src/utils/deployment-for-request'
 
 const MOCK_DEPLOYMENT_WITH_AUTH: Deployment = {
@@ -29,12 +29,7 @@ test('it calls the callback when no deployments are defined', async () => {
   const callback = vi.fn().mockReturnValue(new Response('ok'))
   const request = new Request('https://app.example.com/secrets')
 
-  const config: Config = {
-    deployments: [],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  await withAuth(request, config, compileDeployments([]), callback)
+  await withAuth(request, compileDeployments([]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
@@ -43,42 +38,21 @@ test('it calls the callback when request method is options', async () => {
   const request = new Request('https://app.example.com/secrets', {
     method: 'OPTIONS',
   })
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITH_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
+  await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
 test('it calls the callback when a deployment is matched without auth', async () => {
   const callback = vi.fn().mockReturnValue(new Response('ok'))
   const request = new Request('https://app.example.com/secrets')
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITHOUT_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITHOUT_AUTH]), callback)
+  await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITHOUT_AUTH]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
 test('it does not call callback when there is no matching deployment', async () => {
   const callback = vi.fn().mockReturnValue(new Response('ok'))
   const request = new Request('https://app.example.co.uk/secrets')
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITH_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  const response = await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
+  const response = await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
   expect(response.status).toBe(404)
   expect(callback).not.toHaveBeenCalled()
 })
@@ -86,14 +60,7 @@ test('it does not call callback when there is no matching deployment', async () 
 test('it does not call the callback when auth is required but missing', async () => {
   const callback = vi.fn().mockReturnValue(new Response('ok'))
   const request = new Request('https://app.example.com/secrets')
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITH_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  const response = await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
+  const response = await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
   expect(response.status).toBe(401)
   expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
@@ -106,14 +73,7 @@ test('it does not call the callback when auth is required but username is incorr
       'Authorization': 'Basic dGVzdGVyOmxldG1laW4=', // tester:letmein
     }
   })
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITH_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  const response = await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
+  const response = await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
   expect(response.status).toBe(401)
   expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
@@ -126,14 +86,7 @@ test('it does not call the callback when auth is required but password is incorr
       'Authorization': 'Basic dGVzdDpsZXRtZW91dA==', // test:letmeout
     }
   })
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITH_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  const response = await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
+  const response = await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
   expect(response.status).toBe(401)
   expect(response.headers.get('WWW-Authenticate')).toBe('Basic realm="Cloudflare Router", charset="UTF-8"')
   expect(callback).not.toHaveBeenCalled()
@@ -146,14 +99,7 @@ test('it calls callback when auth is required and valid', async () => {
       'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein
     }
   })
-  const config: Config = {
-    deployments: [
-      MOCK_DEPLOYMENT_WITH_AUTH,
-    ],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
+  await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_AUTH]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
@@ -170,12 +116,7 @@ test('it authenticates when password contains colons', async () => {
       'Authorization': 'Basic dGVzdDpwYXNzOndvcmQ=', // test:pass:word
     }
   })
-  const config: Config = {
-    deployments: [deployment],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  await withAuth(request, config, compileDeployments([deployment]), callback)
+  await withAuth(request, compileDeployments([deployment]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
@@ -190,12 +131,7 @@ test('it rejects when password with colons does not match', async () => {
       'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein (wrong password)
     }
   })
-  const config: Config = {
-    deployments: [deployment],
-    routes: {},
-    edgeCacheTtl: 360
-  }
-  const response = await withAuth(request, config, compileDeployments([deployment]), callback)
+  const response = await withAuth(request, compileDeployments([deployment]), callback)
   expect(response.status).toBe(401)
   expect(callback).not.toHaveBeenCalled()
 })
@@ -221,12 +157,7 @@ test('it calls callback when IP matches allow list', async () => {
   const request = new Request('https://app.example.com/secrets', {
     headers: { 'CF-Connecting-IP': '192.168.1.1' },
   })
-  const config: Config = {
-    deployments: [MOCK_DEPLOYMENT_WITH_IP_AUTH],
-    routes: {},
-    edgeCacheTtl: 360,
-  }
-  await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_IP_AUTH]), callback)
+  await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_IP_AUTH]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
@@ -235,12 +166,7 @@ test('it rejects when IP does not match allow list', async () => {
   const request = new Request('https://app.example.com/secrets', {
     headers: { 'CF-Connecting-IP': '172.16.0.1' },
   })
-  const config: Config = {
-    deployments: [MOCK_DEPLOYMENT_WITH_IP_AUTH],
-    routes: {},
-    edgeCacheTtl: 360,
-  }
-  const response = await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_IP_AUTH]), callback)
+  const response = await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_IP_AUTH]), callback)
   expect(response.status).toBe(401)
   expect(callback).not.toHaveBeenCalled()
 })
@@ -248,12 +174,7 @@ test('it rejects when IP does not match allow list', async () => {
 test('it rejects when CF-Connecting-IP header is missing', async () => {
   const callback = vi.fn().mockReturnValue(new Response('ok'))
   const request = new Request('https://app.example.com/secrets')
-  const config: Config = {
-    deployments: [MOCK_DEPLOYMENT_WITH_IP_AUTH],
-    routes: {},
-    edgeCacheTtl: 360,
-  }
-  const response = await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_IP_AUTH]), callback)
+  const response = await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_IP_AUTH]), callback)
   expect(response.status).toBe(401)
   expect(callback).not.toHaveBeenCalled()
 })
@@ -275,12 +196,7 @@ test('it authorizes via IP when mixed auth config and IP matches', async () => {
   const request = new Request('https://app.example.com/secrets', {
     headers: { 'CF-Connecting-IP': '192.168.1.1' },
   })
-  const config: Config = {
-    deployments: [MOCK_DEPLOYMENT_WITH_MIXED_AUTH],
-    routes: {},
-    edgeCacheTtl: 360,
-  }
-  await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_MIXED_AUTH]), callback)
+  await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_MIXED_AUTH]), callback)
   expect(callback).toHaveBeenCalled()
 })
 
@@ -292,12 +208,6 @@ test('it authorizes via basic auth when mixed auth config and IP does not match'
       'Authorization': 'Basic dGVzdDpsZXRtZWlu', // test:letmein
     },
   })
-  const config: Config = {
-    deployments: [MOCK_DEPLOYMENT_WITH_MIXED_AUTH],
-    routes: {},
-    edgeCacheTtl: 360,
-  }
-  await withAuth(request, config, compileDeployments([MOCK_DEPLOYMENT_WITH_MIXED_AUTH]), callback)
+  await withAuth(request, compileDeployments([MOCK_DEPLOYMENT_WITH_MIXED_AUTH]), callback)
   expect(callback).toHaveBeenCalled()
 })
-
