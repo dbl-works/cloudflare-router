@@ -149,3 +149,16 @@ test('preserves request body on matched route', async () => {
   expect(text).toEqual(body)
 })
 
+// --- Route fallthrough (break vs continue) ---
+
+test('matches a later route when an earlier route is a partial substring match', () => {
+  // "example.com" is a substring of "api.example.com" but not a startsWith match,
+  // so the router should skip it and match the second route instead.
+  const routes = {
+    'example.com': 'https://frontend.example.com',
+    'api.example.com': 'https://backend.example.com',
+  }
+  const { request, cache } = normalizeRequest(new Request('https://api.example.com/data'), routes, false)
+  expect(request.url).toEqual('https://backend.example.com/index.html')
+  expect(cache).toEqual(true)
+})

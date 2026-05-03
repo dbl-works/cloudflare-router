@@ -55,13 +55,13 @@ export default function normalizeRequest(request: Request, routes: Config['route
   for (const [key, value] of Object.entries(routes)) {
     let url = originalUrl
     let newUrl = value
-    if (url.indexOf(key) !== -1) {
+    if (url.includes(key)) {
 
-      if (originalUrlWithoutScheme.startsWith(key) === false && key.startsWith('/') === false) {
-        break
+      if (!originalUrlWithoutScheme.startsWith(key) && !key.startsWith('/')) {
+        continue
       }
 
-      const singlePageApp = isS3Site ? newUrl.indexOf('s3://') === 0 : true
+      const singlePageApp = isS3Site ? newUrl.startsWith('s3://') : true
       const isMediaFile = hasMediaFileExtension(originalUrl)
       if (singlePageApp && isS3Site) {
         newUrl = resolveS3Url(newUrl)
@@ -75,7 +75,7 @@ export default function normalizeRequest(request: Request, routes: Config['route
       if (lastChar === '/') {
         url = url + path
       }
-      if (url.indexOf('https://') !== 0) {
+      if (!url.startsWith('https://')) {
         url = 'https://' + url
       }
 

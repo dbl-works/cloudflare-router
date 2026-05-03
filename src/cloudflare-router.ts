@@ -6,7 +6,7 @@ import { withAuth } from './utils/with-auth'
 
 export const createRouter = (config: Config) => {
   return {
-    async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext): Promise<Response> {
+    async fetch(request: Request, _env: Record<string, unknown>, _ctx: ExecutionContext): Promise<Response> {
       return withAuth(request, config, async () => {
         const { request: normalizedReq, cache } = normalizeRequest(request, config.routes, config.isS3Site)
         const edgeCacheTtl = cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0

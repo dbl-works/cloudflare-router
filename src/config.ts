@@ -21,7 +21,7 @@ export interface Deployment {
 }
 
 export interface Config {
-  deployments: Deployment[]
+  deployments?: Deployment[]
   routes: Routes
   isS3Site?: boolean
   edgeCacheTtl?: number
