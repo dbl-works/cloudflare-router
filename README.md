@@ -35,7 +35,7 @@ export default createRouter({
       accountId: '12345',
       zoneId: 'abcdef',
       routes: [
-        '*example.com/*',
+        'https://*.example.com/*',
       ],
       auth: [
         {
