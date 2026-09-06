@@ -5,9 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [3.0.0] - 2026-09-06
+
+One list of routes. Each route owns its origin, its auth, its cache lifetime and its SPA behavior. See `docs/migration-guide-v2-to-v3.md`.
+
+### Removed
+- **BREAKING**: `deployments`, `accountId` and `zoneId`. Put `auth` on a route or at the top level.
+- **BREAKING**: `isS3Site`. Use `spa` per route or at the top level.
+- **BREAKING**: `DEFAULT_CONFIG`. It advertised a cache TTL that was never applied.
+- **BREAKING**: Path-only route keys such as `'/old-path'`. Every key names a host: `'example.com/old-path'`.
+
 ### Changed
+- **BREAKING**: A request to a host that no route names returns `404 Unknown host`, for every method.
+- **BREAKING**: `createRouter` validates the whole configuration at startup and throws with a message that names the key and the fix. Unknown keys, malformed keys or origins, invalid auth rules, CIDR ranges in `ip` rules, and routes that would make the worker fetch itself all throw.
+- **BREAKING**: `OPTIONS` requests are authenticated like any other request. Only a CORS preflight on a route with `cors: true` passes without credentials. `cors` defaults to `true` for `s3://` origins.
+- **BREAKING**: A protected route with a positive `edgeCacheTtl` must have an `s3://` origin.
+- **BREAKING**: A failed request on a route without a `basic` rule returns `403` instead of a `401` Basic challenge.
+- A route value may be a string or an object. `auth`, `edgeCacheTtl`, `spa` and `cors` resolve the same way: route value, then top-level value, then default.
+- Route matching is exact on the hostname and on path segment boundaries. The most specific key wins. Encoded paths are matched after decoding, so an encoded path cannot reach a different route than its plain form.
+- Basic credentials are removed before the origin fetch on every route of a host that uses Basic auth. On other hosts the `Authorization` header is forwarded.
+
 ### Added
+- Per-route `edgeCacheTtl`, `auth`, `spa` and `cors`.
 
 ## [2.0.0] - 2026-05-03
 ### Changed

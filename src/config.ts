@@ -9,26 +9,24 @@ export type IPAuthMethod = {
   allow: string[]
 }
 
-type AuthMethods = BasicAuthMethod | IPAuthMethod
+export type AuthMethods = BasicAuthMethod | IPAuthMethod
 
-export type Routes = Record<string, string>
-
-export interface Deployment {
-  accountId: string
-  zoneId: string
-  routes: string[]
+export interface Route {
+  origin: string
   auth?: AuthMethods[]
+  edgeCacheTtl?: number
+  /** Serve index.html for navigations. Defaults to true for storage origins such as s3://. */
+  spa?: boolean
+  /** Forward CORS preflights without authentication. Defaults to true for storage origins such as s3://. */
+  cors?: boolean
 }
+
+export type Routes = Record<string, string | Route>
 
 export interface Config {
-  deployments?: Deployment[]
   routes: Routes
-  isS3Site?: boolean
+  auth?: AuthMethods[]
   edgeCacheTtl?: number
-}
-
-export const DEFAULT_CONFIG: Config = {
-  deployments: [],
-  routes: {},
-  edgeCacheTtl: 86400,
+  spa?: boolean
+  cors?: boolean
 }
