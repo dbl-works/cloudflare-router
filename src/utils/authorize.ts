@@ -1,4 +1,5 @@
-import { Route, AuthMethods } from '../config'
+import { AuthMethods } from '../config'
+import { CompiledRoute } from './compile-routes'
 
 // RFC 7235: the authentication scheme is case-insensitive.
 const BASIC_CREDENTIALS = /^basic\s+(\S+)\s*$/i
@@ -78,27 +79,37 @@ const withoutBasicCredentials = (request: Request): Request => {
 }
 
 /**
- * Gates a request with the auth rules of its route. The route rules win over
- * the config rules. An empty list means public. An unknown route is a 404.
+ * A CORS preflight, as a browser sends it: OPTIONS with an Origin and the
+ * method it asks about, and no body. Any other OPTIONS request is an
+ * ordinary request.
+ */
+const isCorsPreflight = (request: Request): boolean =>
+  request.method === 'OPTIONS'
+  && request.headers.has('Origin')
+  && request.headers.has('Access-Control-Request-Method')
+  && request.body === null
+
+/**
+ * Gates a request with the resolved auth rules of its route. An empty list
+ * means public. An unknown route is a 404. A CORS preflight passes, so a
+ * browser can read the CORS headers of the origin.
  *
- * When the effective rules contain a Basic rule, the Authorization header
+ * When any route on the host uses Basic auth, the Authorization header
  * belongs to the edge and is removed before the callback runs. Otherwise the
  * header may belong to the origin and is kept.
  */
-export const authorize = async (request: Request, route: Route | undefined, configAuth: AuthMethods[] | undefined, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
+export const authorize = async (request: Request, route: Pick<CompiledRoute, 'auth' | 'stripBasicCredentials'> | undefined, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
   if (route === undefined) {
     return new Response('Unknown host', { status: 404 })
   }
 
-  const authRules = route.auth ?? configAuth ?? []
-  const usesBasic = authRules.some((rule) => rule.type === 'basic')
-  const forward = (req: Request) => callback(usesBasic ? withoutBasicCredentials(req) : req)
+  const forward = (req: Request) => callback(route.stripBasicCredentials ? withoutBasicCredentials(req) : req)
 
-  if (request.method === 'OPTIONS' || authRules.length === 0) {
+  if (route.auth.length === 0 || isCorsPreflight(request)) {
     return forward(request)
   }
 
-  for (const rule of authRules) {
+  for (const rule of route.auth) {
     if (await matchesRule(rule, request)) {
       return forward(request)
     }

@@ -166,15 +166,30 @@ One rule covers three keys, so a reader learns it once.
 
 ### Route matching
 
-A key has three forms: `host`, `host/path`, and `/path`. The router parses the
-request URL once and compares the canonical hostname and the pathname:
+A key has two forms: `host`, and `host/path`. Every key names a host. A key
+that starts with `/` throws at startup, because the router has no host to
+match it against.
+
+The router parses the request URL once and compares the canonical hostname
+and the pathname:
 
 * A host part must equal the hostname. Case and port do not matter.
 * A path part matches on a segment boundary. `/admin` matches `/admin` and
   `/admin/x`, not `/admin-panel`.
 * A trailing slash on a key or an origin has no meaning.
-* The most specific key wins: host and path, then host, then path. Among
-  equals, the longer path wins.
+* The most specific key wins: host and path, then host. Among equal keys, the
+  longer path wins.
+
+The router canonicalizes the request path before it matches. It splits the
+pathname into segments and percent-decodes each segment for matching, and it
+forwards the segments as the client sent them. Repeated slashes collapse. A
+request matches no route when a segment fails to decode, decodes to `/`, `\`,
+`.`, or `..`, or holds a control character. This closes a bypass where an
+encoded path such as `/%61dmin/secret` missed a protected `example.com/admin`
+route and matched the public `example.com` route instead.
+
+A configured key path, and a path origin, must be plain: no empty segment, no
+`.` or `..` segment, and no percent-encoding. Each throws at startup.
 
 The router builds the target URL from the resolved origin and the rest of the
 request path. On an SPA route a navigation resolves to `index.html`. An asset
@@ -190,14 +205,24 @@ and one list entry.
 
 * An empty key, or a key with a scheme, port, wildcard, query, fragment, or
   whitespace.
+* A key that does not name a host, such as a key that starts with `/`.
+* A key path, or a path origin, with an empty segment, a `.` or `..` segment,
+  or percent-encoding.
 * Two keys that resolve to one route, such as `example.com/admin` and
   `example.com/admin/`.
 * An origin that is not `https://`, a storage shorthand, a host, or a path.
-* An origin with credentials, a query, or a fragment.
-* A storage shorthand that does not match its provider grammar.
+* An origin with whitespace, credentials, a query, or a fragment.
+* A storage shorthand that does not match its provider grammar. For the S3
+  provider: a region with an uppercase letter, a bucket of only dots, or a
+  prefix with an empty or a `.`/`..` segment.
+* A `basic` rule without a non-empty username and password.
+* An `ip` rule without at least one address in `allow`.
+* An `edgeCacheTtl` that is not a whole number of seconds, 0 or more.
+* A route with non-empty effective `auth` and a positive `edgeCacheTtl` on an
+  origin that is not a storage origin. See "Edge cache".
 * A chain of routes that leads back to its start, so the worker would fetch
-  itself. The check knows the hosts named in the keys. A host that no key
-  names counts as external.
+  itself. Because a key must name a host, the hosts the worker serves are
+  exactly the hosts named in the keys, so this check is complete.
 
 The `isS3Site` key throws like `deployments` does. The message names `spa`.
 
@@ -226,13 +251,17 @@ export default createRouter({
 Two concepts cover every case. A default for the worker, and an override for
 one route.
 
-The Basic scheme is matched case-insensitively, as RFC 7235 requires. When
-the effective rules of a route contain a `basic` rule, the router removes the
-`Authorization` header before it contacts the origin. Otherwise the header
-stays, so a public or IP-only route can proxy to an origin with its own Basic
-authentication. Credentials are compared after Unicode normalization on both
-sides. An IP rule needs the `CF-Connecting-IP` header. Without it, the rule
-never matches.
+The Basic scheme is matched case-insensitively, as RFC 7235 requires. Basic
+credential stripping is per host. A `basic` rule on any route of a host
+affects every route on that host. The router removes the
+`Authorization: Basic ...` header from each route before it contacts the
+origin, including a public sibling route. A browser re-sends Basic
+credentials to every path on a host, so a public sibling route would
+otherwise forward the edge credentials to its origin. On a host where no
+route uses Basic auth, the header stays, so a route can proxy to an origin
+with its own Basic authentication. Credentials are compared after Unicode
+normalization on both sides. An IP rule needs the `CF-Connecting-IP` header.
+Without it, the rule never matches.
 
 ### Edge cache
 
@@ -278,6 +307,13 @@ never applied, so 3.0.0 removes the export. A cache that is on by default
 would store a per-user response from a dynamic origin behind IP auth and
 serve it to the next user.
 
+The edge cache key is the URL only, and `cacheEverything` overrides the
+origin's own cache headers. A route with non-empty effective `auth` and a
+positive `edgeCacheTtl` must therefore have a storage origin such as `s3://`.
+`createRouter` throws otherwise, naming the fix: set `edgeCacheTtl: 0` on the
+route. Without this rule, one authorized user's response from an application
+origin would cache under the shared URL key and serve to every other user.
+
 ### An unknown host returns 404
 
 The router resolves the route first. If no `routes` entry matches, it returns
@@ -296,11 +332,18 @@ The caller reads the origin and the cache lifetime from one object.
 
 ### `OPTIONS` requests
 
-An `OPTIONS` request skips authentication, so a browser can read the CORS
-headers of the origin. It still needs a matching route. An `OPTIONS` request
-to an unknown host returns 404.
+Only a CORS preflight skips authentication, so a browser can read the CORS
+headers of the origin. A preflight is an `OPTIONS` request with an `Origin`
+header, an `Access-Control-Request-Method` header, and no body. Every other
+`OPTIONS` request is authenticated like a `GET`.
 
-The 2.x behavior skips the whole gate. That is wider than the reason for it.
+An `OPTIONS` request still needs a matching route. An `OPTIONS` request to an
+unknown host returns 404, preflight or not.
+
+The 2.x behavior skips the whole gate for every `OPTIONS` request. That is
+wider than the reason for it. A `curl -X OPTIONS` with a body, or a framework
+route such as Rails `match ... via: :all`, reached a protected origin
+unauthenticated.
 
 ### `deployments` is removed
 
@@ -395,6 +438,24 @@ that map itself, next to the credentials it already holds.
 A flag would keep the 2.x shape alive, and with it the two lists. The point of
 this release is to remove the second list.
 
+### Path-only keys are removed
+
+An earlier draft of this design kept a `/path` key that matched any host. The
+review round removed it.
+
+A path-only key hides a host the worker also serves. The self-fetch check at
+startup only knows the hosts named in the keys. A path-only key that targets
+an unnamed host is invisible to that check. This design drops path-only keys,
+so the served hosts become exactly the key hosts, and the check is complete.
+
+A path-only key also complicated precedence. With three key forms, a host and
+path key beats a host key, and a host key beats a path key. With two forms,
+one rule covers every case: the longer path wins on a host.
+
+Every known consumer already lists its hosts. A path origin, such as
+`/new-path`, still exists. It rewrites the path on the same host, and it
+needs a `host/path` key.
+
 ## Semantic versioning
 
 This is a major release. These behaviors change:
@@ -410,6 +471,15 @@ This is a major release. These behaviors change:
   defect surfaced as a silent 404 or an error on the first request.
 * Route matching is exact on the hostname and on path segment boundaries.
   Before, a substring match on the serialized URL decided.
+* A path-only key is removed. Every key must name a host. `createRouter`
+  throws on a key that starts with `/`.
+* Only a CORS preflight skips authentication on an `OPTIONS` request. Before,
+  every `OPTIONS` request skipped authentication.
+* Basic credential stripping is per host. When any route on a host uses a
+  `basic` rule, the router strips the header from every route on that host.
+  Before, stripping followed the effective rules of the route alone.
+* `createRouter` throws when a route has non-empty effective `auth` and a
+  positive `edgeCacheTtl` on an origin that is not a storage origin.
 
 ### Migration
 
@@ -435,14 +505,16 @@ Rewrite `test/utils/with-auth.test.ts` as `test/utils/authorize.test.ts`:
 * A route with `auth` overrides the top-level `auth`.
 * An IP rule and a basic rule on one route both grant access.
 * An unknown host returns 404.
-* An `OPTIONS` request to a protected route passes through.
+* A CORS preflight to a protected route passes through without credentials.
+* An `OPTIONS` request without a preflight header set is authenticated like a
+  `GET`.
 * An `OPTIONS` request to an unknown host returns 404.
 
 Update `test/utils/normalize-request.test.ts`:
 
 * A string route value resolves as it does today.
 * An object route value resolves its `origin` the same way.
-* A path-only key still matches any host.
+* A percent-encoded segment that decodes to `..` matches no route.
 * A matched request returns its route.
 
 Add cases to `test/utils/handle-request.test.ts`:
@@ -486,6 +558,16 @@ Delete `test/utils/deployment-for-request.test.ts`.
    module per storage service. Add `compile-routes.ts` with key parsing,
    specificity ordering, validation, and cycle detection. Replace `isS3Site`
    with `spa`. Restore the 2.x cache default. Update the docs.
+
+   A second review round widened this phase further. Canonicalize the
+   request path before matching, and reject a key or a path origin that is
+   not plain. Remove path-only keys, so a key must name a host. Scope Basic
+   credential stripping to the host instead of the route. Skip
+   authentication only for a real CORS preflight on `OPTIONS`. Reject a
+   protected route that caches an application origin. Move the resolution of
+   `auth`, `edgeCacheTtl`, and `spa` into `compileRoutes`, which now returns
+   compiled routes with every default already resolved. `normalizeRequest`
+   and `authorize` consume the compiled route.
 
 ## Resolved questions
 

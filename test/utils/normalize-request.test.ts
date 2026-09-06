@@ -4,7 +4,7 @@ import { compileRoutes } from '../../src/utils/compile-routes'
 import { Routes } from '../../src/config'
 
 const normalizeRequest = (request: Request, routes: Routes, spa?: boolean) =>
-  normalize(request, compileRoutes(routes), spa)
+  normalize(request, compileRoutes({ routes, spa }))
 
 const TEST_ROUTES = {
   'admin.example.com': 'https://s3.eu-central-1.amazonaws.com/assets.example.com/admin',
@@ -12,7 +12,7 @@ const TEST_ROUTES = {
   'dashboard.example.com': 's3://eu-central-1.assets.example.com/dashboard',
   'fonts.example.com': 's3://us-east-1.fonts.example.com',
   'cdn.example.com': 's3://eu-central-1.bucket-name/public',
-  '/old-path': '/new-path',
+  'example.com/old-path': '/new-path',
   'object.example.com': { origin: 's3://eu-central-1.bucket-name/object', edgeCacheTtl: 123 },
 }
 
@@ -25,7 +25,7 @@ test('returns the original input if no matching routes', () => {
 test('maps root js file to s3 bucket subpath', () => {
   const { request, route } = normalizeRequest(new Request('https://admin.example.com/some/file.js'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/admin/some/file.js')
-  expect(route).toEqual({ origin: TEST_ROUTES['admin.example.com'] })
+  expect(route?.origin).toEqual(TEST_ROUTES['admin.example.com'])
 })
 
 test('maps root path to s3 bucket subpath', () => {
@@ -91,7 +91,8 @@ test('maps pdf to s3 bucket location (virtual-hosted style for dot-free bucket)'
 test('maps object route value origin', () => {
   const { request, route } = normalizeRequest(new Request('https://object.example.com/some/file.pdf'), TEST_ROUTES)
   expect(request.url).toEqual('https://bucket-name.s3.eu-central-1.amazonaws.com/object/some/file.pdf')
-  expect(route).toEqual({ origin: 's3://eu-central-1.bucket-name/object', edgeCacheTtl: 123 })
+  expect(route?.origin).toEqual('s3://eu-central-1.bucket-name/object')
+  expect(route?.edgeCacheTtl).toBe(123)
 })
 
 // --- EU Sovereign Cloud ---
@@ -207,22 +208,15 @@ test('a route spa value wins over the config default', () => {
 // --- Path keys ---
 
 test('does not match query strings for path routes', () => {
-  const routes = { '/public': 's3://eu-central-1.bucket/public' }
-  const { route } = normalizeRequest(new Request('https://unknown.test/?next=/public'), routes)
+  const routes = { 'example.com/public': 's3://eu-central-1.bucket/public' }
+  const { route } = normalizeRequest(new Request('https://example.com/?next=/public'), routes)
   expect(route).toBeUndefined()
 })
 
 test('path keys match on a segment boundary only', () => {
-  const routes = { '/admin': 's3://eu-central-1.bucket/admin' }
+  const routes = { 'example.com/admin': 's3://eu-central-1.bucket/admin' }
   const { route } = normalizeRequest(new Request('https://example.com/admin-panel/file.js'), routes)
   expect(route).toBeUndefined()
-})
-
-test('trailing slash keys match descendants and keep the path', () => {
-  const routes = { '/admin/': 's3://eu-central-1.bucket/admin' }
-  const { request, route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
-  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/file.js')
-  expect(route).toBeDefined()
 })
 
 test('trailing slash keys match descendants for host paths', () => {
@@ -239,7 +233,7 @@ test('trailing slash keys match the bare path', () => {
 })
 
 test('path key rewrites deep paths to a path origin on the same host', () => {
-  const routes = { '/old-path': '/new-path' }
+  const routes = { 'example.com/old-path': '/new-path' }
   const { request } = normalizeRequest(new Request('https://example.com/old-path/a/b.js?x=1'), routes)
   expect(request.url).toEqual('https://example.com/new-path/a/b.js?x=1')
 })
@@ -309,23 +303,37 @@ test('a host and path key beats a host key', () => {
   expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/a.js')
 })
 
-test('a host key beats a longer path-only key, so the host keeps its auth', () => {
+test('among path keys the longer path wins', () => {
   const routes = {
-    'admin.example.com': { origin: 's3://eu-central-1.bucket/admin', auth: [{ type: 'basic', username: 'u', password: 'p' }] as const },
-    '/admin-assets-and-uploads': 's3://eu-central-1.bucket/uploads',
+    'docs.example.com/docs': 's3://eu-central-1.bucket/docs',
+    'docs.example.com/docs/api': 's3://eu-central-1.bucket/api',
   }
-  const { request, route } = normalizeRequest(new Request('https://admin.example.com/admin-assets-and-uploads/payroll.pdf'), routes)
-  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/admin-assets-and-uploads/payroll.pdf')
-  expect(route?.auth).toHaveLength(1)
+  const { request } = normalizeRequest(new Request('https://docs.example.com/docs/api/a.js'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/api/a.js')
 })
 
-test('among path-only keys the longer path wins', () => {
+// --- Encoded paths ---
+
+test('an encoded path resolves to the route it decodes to and forwards the raw remainder', () => {
   const routes = {
-    '/docs': 's3://eu-central-1.bucket/docs',
-    '/docs/api': 's3://eu-central-1.bucket/api',
+    'example.com': 'https://origin.example/pub',
+    'example.com/admin': { origin: 'https://origin.example/admin', auth: [{ type: 'basic', username: 'u', password: 'p' }] as const },
   }
-  const { request } = normalizeRequest(new Request('https://any.example/docs/api/a.js'), routes)
-  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/api/a.js')
+  const { request, route } = normalizeRequest(new Request('https://example.com/%61dmin/sec%20ret'), routes)
+  expect(route?.key).toBe('example.com/admin')
+  expect(request.url).toEqual('https://origin.example/admin/sec%20ret')
+})
+
+test('a path with an encoded slash or a malformed escape matches no route', () => {
+  const routes = { 'example.com': 'https://origin.example/pub' }
+  expect(normalizeRequest(new Request('https://example.com/a%2Fb'), routes).route).toBeUndefined()
+  expect(normalizeRequest(new Request('https://example.com/%zz'), routes).route).toBeUndefined()
+})
+
+test('an encoded asset name still counts as an asset', () => {
+  const routes = { 'app.example.com': 's3://eu-central-1.bucket/app' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/my%20file.js'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/app/my%20file.js')
 })
 
 test('a Unicode host key matches its punycode hostname', () => {

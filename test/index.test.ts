@@ -61,20 +61,30 @@ const invalidRoutes: [string, Config['routes'], RegExp][] = [
   ['two keys that differ by a trailing slash', { 'example.com/admin': 's3://eu-central-1.bucket/a', 'example.com/admin/': 's3://eu-central-1.bucket/b' }, /same route/],
   ['two keys that differ by case', { 'Example.com': 's3://eu-central-1.bucket/a', 'example.com': 's3://eu-central-1.bucket/b' }, /same route/],
   ['an s3 origin without a region', { 'example.com': 's3://bucket/app' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 origin with a space', { 'example.com': 's3://eu-central-1.my bucket/app' }, /s3:\/\/REGION\.BUCKET/],
+  ['an s3 origin with a space', { 'example.com': 's3://eu-central-1.my bucket/app' }, /whitespace/],
   ['an http origin', { 'example.com': 'http://origin.example' }, /https:\/\//],
   ['an origin equal to the route host', { 'example.com': 'example.com' }, /fetches itself/],
   ['an https origin on the route host', { 'example.com': 'https://example.com/other' }, /fetches itself/],
   ['a path origin on a host-only key', { 'example.com': '/index.html' }, /fetches itself/],
-  ['a path origin under the key path', { '/old': '/old/v2' }, /fetches itself/],
-  ['a path-only key whose origin path matches the key again on a served host', { '/app': 'https://app.example.com/app', 'app.example.com/other': 's3://eu-central-1.bucket' }, /fetches itself/],
+  ['a path origin under the key path', { 'example.com/old': '/old/v2' }, /fetches itself/],
+  ['a path-only key', { '/app': 's3://eu-central-1.bucket' }, /must name a host/],
+  ['a key with a dot segment', { 'example.com/foo/../app': 's3://eu-central-1.bucket' }, /"\." or "\.\."/],
+  ['a key with an empty segment', { 'example.com/foo//app': 's3://eu-central-1.bucket' }, /empty segments/],
+  ['a path origin with a dot segment that normalizes back onto the key', { 'example.com/app': '/foo/../app' }, /"\." or "\.\."/],
+  ['an s3 origin whose bucket is dots', { 'example.com': 's3://eu-central-1.../private' }, /s3:\/\/REGION\.BUCKET/],
+  ['an s3 origin with a dot segment in the prefix', { 'example.com': 's3://eu-central-1.bucket/../other' }, /s3:\/\/REGION\.BUCKET/],
+  ['an s3 origin with an empty prefix segment', { 'example.com': 's3://eu-central-1.bucket//other' }, /s3:\/\/REGION\.BUCKET/],
+  ['a basic rule without a password', { 'example.com': { origin: 's3://eu-central-1.bucket', auth: [{ type: 'basic', username: 'u', password: '' }] } }, /username and a password/],
+  ['an ip rule without addresses', { 'example.com': { origin: 's3://eu-central-1.bucket', auth: [{ type: 'ip', allow: [] }] } }, /at least one address/],
+  ['a negative edgeCacheTtl', { 'example.com': { origin: 's3://eu-central-1.bucket', edgeCacheTtl: -1 } }, /whole number/],
+  ['a protected application origin with a cache', { 'example.com': { origin: 'https://backend.example', auth: [{ type: 'ip', allow: ['1.1.1.1'] }], edgeCacheTtl: 60 } }, /caches only a storage origin/],
   ['a two-host cycle', { 'a.example.com': 'https://b.example.com', 'b.example.com': 'https://a.example.com' }, /leads back to this route through "b.example.com"/],
   ['a cycle through a path route', { 'a.example.com': 'https://b.example.com/', 'b.example.com/legacy': 'https://a.example.com' }, /fetches itself/],
   ['a key with a query', { 'example.com?preview=1': 's3://eu-central-1.bucket' }, /query or fragment/],
   ['a key with a fragment', { 'example.com#top': 's3://eu-central-1.bucket' }, /query or fragment/],
   ['an origin with credentials', { 'example.com': 'https://user:pass@origin.example' }, /credentials/],
-  ['an origin with a query', { 'example.com': 'https://origin.example/base?tenant=1' }, /query or fragment/],
-  ['an origin with a fragment', { 'example.com': 's3://eu-central-1.bucket/app#x' }, /query or fragment/],
+  ['an origin with a query', { 'example.com': 'https://origin.example/base?tenant=1' }, /a query or a fragment/],
+  ['an origin with a fragment', { 'example.com': 's3://eu-central-1.bucket/app#x' }, /a query or a fragment/],
   ['an s3 origin with a slash in the region', { 'example.com': 's3://eu-central-1/foo.bucket' }, /s3:\/\/REGION\.BUCKET/],
   ['an s3 origin with uppercase', { 'example.com': 's3://eu-central-1.MyBucket' }, /s3:\/\/REGION\.BUCKET/],
 ]
@@ -90,16 +100,27 @@ test('createRouter accepts every documented key and origin form', () => {
     routes: {
       'www.example.com': 's3://eu-central-1.bucket/www',
       'example.com/admin': { origin: 'https://origin.example/admin/', auth: [] },
-      '/old-path': '/new-path',
+      'www.example.com/old-path': '/new-path',
       'api.example.com': 'backend.example/base',
       'Sovereign.example.com': 's3://eusc-de-east-1.bucket',
     },
   })).not.toThrow()
 })
 
-test('createRouter treats a host that no key names as external', () => {
-  // The worker cannot know that it serves app.example.com, so this passes. See README.
-  expect(() => createRouter({ routes: { '/app': 'https://app.example.com/app' } })).not.toThrow()
+test('createRouter rejects a protected application origin with a top-level cache', () => {
+  expect(() => createRouter({
+    edgeCacheTtl: 60,
+    auth: [{ type: 'basic', username: 'u', password: 'p' }],
+    routes: { 'app.example.com': 'https://backend.example' },
+  })).toThrow(/caches only a storage origin/)
+})
+
+test('createRouter accepts a protected storage origin with a cache', () => {
+  expect(() => createRouter({
+    edgeCacheTtl: 60,
+    auth: [{ type: 'basic', username: 'u', password: 'p' }],
+    routes: { 'app.example.com': 's3://eu-central-1.bucket/app' },
+  })).not.toThrow()
 })
 
 test('createRouter accepts a chain that ends at a storage origin', () => {
