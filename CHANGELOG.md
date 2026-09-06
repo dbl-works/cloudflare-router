@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: An unknown host request (one that doesn't match any `routes` entry) now immediately returns a `404 Not Found` with the body `Unknown host`. Previously, if `deployments` was empty, the router would attempt to fetch the original URL, which could cause a worker to self-fetch infinitely.
 - **BREAKING**: `OPTIONS` requests to unknown hosts now return `404 Not Found`. Previously, they bypassed the deployment matching and were passed through to the upstream origin regardless of the host.
 - Auth rules can now be defined per-route or globally in `Config`.
+- Route matching now parses the request URL instead of replacing substrings. A host key must equal the request hostname. A path key matches on a segment boundary. The most specific key wins: host and path, then host, then path. Trailing slashes on keys and origins have no meaning. The request port never reaches the origin, and a query string never changes the asset detection.
+- **BREAKING**: `createRouter` validates every route at startup and throws on a malformed key, a duplicate key, a malformed origin, or an origin that points back at the route host. In v2 these defects surfaced as a 404 or a runtime error on the first request.
+- **BREAKING**: The `isS3Site` flag is replaced by `spa`, which is available per route and at the top level. `createRouter` throws when `isS3Site` is present. A route with a storage origin such as `s3://` is an SPA by default. Any other origin is a plain proxy by default. `isS3Site: false` becomes `spa: true`.
+- **BREAKING**: `DEFAULT_CONFIG` is no longer exported. It advertised an `edgeCacheTtl` of 86400 that the router never applied. Without `edgeCacheTtl` the router does not cache, as in v2.
+- The `Authorization` header is removed before the origin fetch only when the effective auth rules contain a `basic` rule. The Basic scheme is matched case-insensitively.
+- An `ip` rule now rejects a request without a `CF-Connecting-IP` header. Before, such a request matched an `allow` entry of `0.0.0.0/0`.
+- Basic auth compares credentials after Unicode normalization on both sides, so a rule stored in NFD matches a client that sends NFC.
 
 ### Added
 - Added per-route `edgeCacheTtl` support, allowing you to configure different cache lifetimes for different hosts.

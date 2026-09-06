@@ -17,7 +17,7 @@ No special setup is required for v3.0.0. Install the package via npm or yarn.
 import { createRouter } from '@dbl-works/cloudflare-router'
 
 export default createRouter({
-  // Global cache TTL
+  // Global cache TTL in seconds. Without it, the router does not cache.
   edgeCacheTtl: 86400,
 
   routes: {
@@ -33,26 +33,74 @@ export default createRouter({
 })
 ```
 
-### S3 Routing (SPA)
+### Single-page applications
 
-For single-page applications hosted on S3, non-asset requests (HTML navigation) are automatically rewritten to serve `index.html`:
+For a single-page application, the router rewrites every navigation request to `index.html`. Asset requests keep their path. A route with a storage origin such as `s3://` is an SPA by default. Any other origin is a plain proxy by default.
+
+The `spa` flag overrides the default. It resolves like `auth` and `edgeCacheTtl`: a route value wins, then the top-level value, then the default.
 
 ```typescript
 export default createRouter({
   routes: {
+    // An SPA by default.
     'app.example.com': 's3://eu-central-1.my-bucket/app',
+
+    // A plain proxy by default.
+    'api.example.com': 'https://backend.example.com',
+
+    // An SPA on a non-S3 origin.
+    'legacy.example.com': { origin: 'https://blob.example/app', spa: true },
+
+    // Plain file serving from S3, no index.html rewrite.
+    'files.example.com': { origin: 's3://eu-central-1.my-bucket/files', spa: false },
   },
 })
 ```
 
 ## Match rules
 
-- Starting with `/` does a path only match
-- Any other start will assume matching against `[domain][path]` as the value
+A route key has one of three forms:
+
+| Key                  | Matches                                                  |
+| -------------------- | -------------------------------------------------------- |
+| `app.example.com`    | Every request to that host                               |
+| `example.com/admin`  | Requests to that host with a path under `/admin`         |
+| `/admin`             | Requests to any host with a path under `/admin`          |
+
+The rules:
+
+- A host part must equal the request hostname. The comparison ignores case and the port.
+- A path part matches on a segment boundary. `/admin` matches `/admin` and `/admin/x`, not `/admin-panel`.
+- A trailing slash on a key has no meaning. `/admin/` and `/admin` are the same key.
+- The most specific key wins. A host and path key beats a host key, and a host key beats a path key. Among equals, the longer path wins.
+- A request that matches no key returns `404 Unknown host`.
+
+The router builds the origin URL from the origin and the rest of the request path. On an SPA route, a navigation request resolves to `index.html`, and an asset request keeps its path and query string. The router never sends the request port to the origin.
+
+An origin has one of four forms:
+
+| Origin                           | Result                                                          |
+| -------------------------------- | --------------------------------------------------------------- |
+| `s3://eu-central-1.bucket/app`   | The HTTPS URL of that S3 prefix, with SPA `index.html` rewrites |
+| `https://origin.example/base`    | That URL, as a plain proxy                                      |
+| `origin.example/base`            | The same, with `https://` added                                 |
+| `/new-path`                      | The same host with a new path prefix                            |
+
+`createRouter` validates every route at startup and throws on the first defect. The message names the key and the fix. It rejects:
+
+- An empty key, a key with a scheme, a port, a wildcard, or whitespace.
+- Two keys that resolve to one route, such as `example.com/admin` and `example.com/admin/`.
+- An origin that is not `https://`, an `s3://` shorthand, a host, or a path.
+- An `s3://` origin without a region, or one that does not form a valid URL.
+- An origin that points at the route host, because the worker would fetch itself.
 
 ## Basic Authentication & IP Restrictions
 
 You can protect specific routes by defining basic auth or IP restrictions per route, or globally in the config.
+
+An `ip` rule lists exact client IP addresses. CIDR ranges are not supported. The client IP comes from the `CF-Connecting-IP` header that Cloudflare sets. A request without that header never satisfies an `ip` rule.
+
+When the effective rules of a route contain a `basic` rule, the router removes the `Authorization` header before it contacts the origin. The edge credentials never reach the origin. On a public or IP-only route, the header stays, so you can proxy to an origin that requires its own Basic authentication.
 
 ```typescript
 import { createRouter } from '@dbl-works/cloudflare-router'

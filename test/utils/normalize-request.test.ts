@@ -128,7 +128,7 @@ test('works with Account Regional namespace bucket names', () => {
 test('preserves HTTP method on matched route', () => {
   const routes = { 'api.example.com': 'https://backend.example.com' }
   const original = new Request('https://api.example.com/data', { method: 'POST' })
-  const { request } = normalizeRequest(original, routes, false)
+  const { request } = normalizeRequest(original, routes)
   expect(request.method).toEqual('POST')
 })
 
@@ -138,7 +138,7 @@ test('preserves request headers on matched route', () => {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer token123' },
   })
-  const { request } = normalizeRequest(original, routes, false)
+  const { request } = normalizeRequest(original, routes)
   expect(request.headers.get('Content-Type')).toEqual('application/json')
   expect(request.headers.get('Authorization')).toEqual('Bearer token123')
 })
@@ -151,7 +151,7 @@ test('preserves request body on matched route', async () => {
     headers: { 'Content-Type': 'application/json' },
     body,
   })
-  const { request } = normalizeRequest(original, routes, false)
+  const { request } = normalizeRequest(original, routes)
   const text = await request.text()
   expect(text).toEqual(body)
 })
@@ -163,25 +163,174 @@ test('matches a later route when an earlier route is a partial substring match',
     'example.com': 'https://frontend.example.com',
     'api.example.com': 'https://backend.example.com',
   }
-  const { request, route } = normalizeRequest(new Request('https://api.example.com/data'), routes, false)
+  const { request, route } = normalizeRequest(new Request('https://api.example.com/data'), routes, true)
   expect(request.url).toEqual('https://backend.example.com/index.html')
   expect(route).toBeDefined()
 })
 
+// --- spa flag ---
+
+test('a storage origin is an SPA by default', () => {
+  const routes = { 'app.example.com': 's3://eu-central-1.bucket/app' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/users'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/app/index.html')
+})
+
+test('an https origin is a plain proxy by default', () => {
+  const routes = { 'api.example.com': 'https://backend.example.com' }
+  const { request } = normalizeRequest(new Request('https://api.example.com/v1/users?page=2'), routes)
+  expect(request.url).toEqual('https://backend.example.com/v1/users?page=2')
+})
+
+test('a config spa default turns an https origin into an SPA', () => {
+  const routes = { 'app.example.com': 'https://blob.example/app' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/users'), routes, true)
+  expect(request.url).toEqual('https://blob.example/app/index.html')
+})
+
+test('a route spa value wins over the config default', () => {
+  const routes = {
+    'api.example.com': { origin: 'https://backend.example.com', spa: false },
+    'files.example.com': { origin: 's3://eu-central-1.bucket/files', spa: false },
+  }
+  expect(normalizeRequest(new Request('https://api.example.com/v1/users'), routes, true).request.url)
+    .toEqual('https://backend.example.com/v1/users')
+  expect(normalizeRequest(new Request('https://files.example.com/reports/2026'), routes).request.url)
+    .toEqual('https://bucket.s3.eu-central-1.amazonaws.com/files/reports/2026')
+})
+
+// --- Path keys ---
+
 test('does not match query strings for path routes', () => {
-  const routes = { '/public': 's3://bucket/public' }
+  const routes = { '/public': 's3://eu-central-1.bucket/public' }
   const { route } = normalizeRequest(new Request('https://unknown.test/?next=/public'), routes)
   expect(route).toBeUndefined()
 })
 
-test('trailing slash keys match descendants', () => {
-  const routes = { '/admin/': 's3://bucket/admin' }
-  const { route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
+test('path keys match on a segment boundary only', () => {
+  const routes = { '/admin': 's3://eu-central-1.bucket/admin' }
+  const { route } = normalizeRequest(new Request('https://example.com/admin-panel/file.js'), routes)
+  expect(route).toBeUndefined()
+})
+
+test('trailing slash keys match descendants and keep the path', () => {
+  const routes = { '/admin/': 's3://eu-central-1.bucket/admin' }
+  const { request, route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/file.js')
   expect(route).toBeDefined()
 })
 
 test('trailing slash keys match descendants for host paths', () => {
-  const routes = { 'example.com/admin/': 's3://bucket/admin' }
-  const { route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
+  const routes = { 'example.com/admin/': 's3://eu-central-1.bucket/admin' }
+  const { request, route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/file.js')
   expect(route).toBeDefined()
+})
+
+test('trailing slash keys match the bare path', () => {
+  const routes = { 'example.com/admin/': 's3://eu-central-1.bucket/admin' }
+  const { request } = normalizeRequest(new Request('https://example.com/admin'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/index.html')
+})
+
+test('path key rewrites deep paths to a path origin on the same host', () => {
+  const routes = { '/old-path': '/new-path' }
+  const { request } = normalizeRequest(new Request('https://example.com/old-path/a/b.js?x=1'), routes)
+  expect(request.url).toEqual('https://example.com/new-path/a/b.js?x=1')
+})
+
+// --- Host keys ---
+
+test('host keys match the hostname only, never a suffix or prefix', () => {
+  const routes = { 'example.com': 'https://origin.example/base' }
+  expect(normalizeRequest(new Request('https://example.com.evil.test/'), routes).route).toBeUndefined()
+  expect(normalizeRequest(new Request('https://evil-example.com/'), routes).route).toBeUndefined()
+})
+
+test('host keys match case-insensitively', () => {
+  const routes = { 'App.Example.com': 'https://origin.example/base' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/a.js'), routes)
+  expect(request.url).toEqual('https://origin.example/base/a.js')
+})
+
+test('an incoming port never reaches the origin', () => {
+  const routes = { 'app.example.com': 'https://origin.example/base' }
+  const { request } = normalizeRequest(new Request('https://app.example.com:8443/a.js'), routes)
+  expect(request.url).toEqual('https://origin.example/base/a.js')
+})
+
+// --- Query strings ---
+
+test('assets keep their query string on SPA routes', () => {
+  const routes = { 'app.example.com': 's3://eu-central-1.bucket/app' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/file.js?v=1'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/app/file.js?v=1')
+})
+
+test('navigations drop their query string on SPA routes', () => {
+  const routes = { 'app.example.com': 's3://eu-central-1.bucket/app' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/users?page=2'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/app/index.html')
+})
+
+test('proxied routes keep their query string', () => {
+  const routes = { 'api.example.com': 'https://backend.example.com' }
+  const { request } = normalizeRequest(new Request('https://api.example.com/data?page=2'), routes)
+  expect(request.url).toEqual('https://backend.example.com/data?page=2')
+})
+
+// --- Origins with a trailing slash ---
+
+test('an origin with a trailing slash produces a clean SPA path', () => {
+  const routes = { 'app.example.com': 's3://eu-central-1.bucket/app/' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/dashboard'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/app/index.html')
+})
+
+test('an origin with a trailing slash produces a clean asset path', () => {
+  const routes = { 'app.example.com': 'https://origin.example/base/' }
+  const { request } = normalizeRequest(new Request('https://app.example.com/a.js'), routes)
+  expect(request.url).toEqual('https://origin.example/base/a.js')
+})
+
+// --- Precedence ---
+
+test('a host and path key beats a host key', () => {
+  const routes = {
+    'example.com': 's3://eu-central-1.bucket/www',
+    'example.com/admin': 's3://eu-central-1.bucket/admin',
+  }
+  const { request } = normalizeRequest(new Request('https://example.com/admin/a.js'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/a.js')
+})
+
+test('a host key beats a longer path-only key, so the host keeps its auth', () => {
+  const routes = {
+    'admin.example.com': { origin: 's3://eu-central-1.bucket/admin', auth: [{ type: 'basic', username: 'u', password: 'p' }] as const },
+    '/admin-assets-and-uploads': 's3://eu-central-1.bucket/uploads',
+  }
+  const { request, route } = normalizeRequest(new Request('https://admin.example.com/admin-assets-and-uploads/payroll.pdf'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/admin/admin-assets-and-uploads/payroll.pdf')
+  expect(route?.auth).toHaveLength(1)
+})
+
+test('among path-only keys the longer path wins', () => {
+  const routes = {
+    '/docs': 's3://eu-central-1.bucket/docs',
+    '/docs/api': 's3://eu-central-1.bucket/api',
+  }
+  const { request } = normalizeRequest(new Request('https://any.example/docs/api/a.js'), routes)
+  expect(request.url).toEqual('https://bucket.s3.eu-central-1.amazonaws.com/api/a.js')
+})
+
+test('a Unicode host key matches its punycode hostname', () => {
+  const routes = { 'exämple.com': 'https://origin.example/base' }
+  const { request } = normalizeRequest(new Request('https://exämple.com/a.js'), routes)
+  expect(request.url).toEqual('https://origin.example/base/a.js')
+})
+
+test('a path origin never carries the request port', () => {
+  const routes = { 'example.com/old': '/new' }
+  const { request } = normalizeRequest(new Request('https://example.com:8443/old/a.js'), routes)
+  expect(request.url).toEqual('https://example.com/new/a.js')
 })

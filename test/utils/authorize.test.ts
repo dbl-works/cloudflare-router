@@ -92,8 +92,8 @@ test('An OPTIONS request to an unknown host returns 404', async () => {
   expect(res.status).toBe(404)
 })
 
-test('Strips Basic credentials from origin-bound requests (IP Auth)', async () => {
-  const route: Route = { origin: 's3://bucket', auth: [ipAuthMethod] }
+test('Strips Basic credentials from origin-bound requests (IP grants, route uses Basic)', async () => {
+  const route: Route = { origin: 's3://bucket', auth: [basicAuthMethod, ipAuthMethod] }
   let forwardedReq: Request | undefined
   const callback = vi.fn().mockImplementation(async (req) => {
     forwardedReq = req
@@ -114,4 +114,90 @@ test('Strips Basic credentials from origin-bound requests (OPTIONS)', async () =
   const res = await authorize(createAuthRequest('OPTIONS', basicAuthHeader), route, undefined, callback)
   expect(res.status).toBe(200)
   expect(forwardedReq?.headers.get('Authorization')).toBeNull()
+})
+
+// --- Authentication scheme is case-insensitive (RFC 7235) ---
+
+test('accepts a lowercase basic scheme', async () => {
+  const route: Route = { origin: 's3://bucket', auth: [basicAuthMethod] }
+  const res = await authorize(createAuthRequest('GET', 'basic ' + btoa('test:letmein')), route, undefined, mockCallback)
+  expect(res.status).toBe(200)
+})
+
+test('Strips lowercase basic credentials from origin-bound requests', async () => {
+  const route: Route = { origin: 's3://bucket', auth: [basicAuthMethod, ipAuthMethod] }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  const res = await authorize(createAuthRequest('GET', 'basic ' + btoa('x:y'), '192.168.1.1'), route, undefined, callback)
+  expect(res.status).toBe(200)
+  expect(forwardedReq?.headers.get('Authorization')).toBeNull()
+})
+
+// --- Stripping is scoped to routes that use Basic auth ---
+
+test('Keeps Basic credentials on a public route', async () => {
+  const route: Route = { origin: 'https://origin.example', auth: [] }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  await authorize(createAuthRequest('GET', basicAuthHeader), route, [basicAuthMethod], callback)
+  expect(forwardedReq?.headers.get('Authorization')).toBe(basicAuthHeader)
+})
+
+test('Keeps Basic credentials on an IP-only route', async () => {
+  const route: Route = { origin: 'https://origin.example', auth: [ipAuthMethod] }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  const res = await authorize(createAuthRequest('GET', basicAuthHeader, '192.168.1.1'), route, undefined, callback)
+  expect(res.status).toBe(200)
+  expect(forwardedReq?.headers.get('Authorization')).toBe(basicAuthHeader)
+})
+
+test('Keeps a Bearer token when the route uses Basic auth and the IP rule grants access', async () => {
+  const route: Route = { origin: 'https://origin.example', auth: [basicAuthMethod, ipAuthMethod] }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  const res = await authorize(createAuthRequest('GET', 'Bearer token123', '192.168.1.1'), route, undefined, callback)
+  expect(res.status).toBe(200)
+  expect(forwardedReq?.headers.get('Authorization')).toBe('Bearer token123')
+})
+
+test('Strips Basic credentials when the top-level auth uses Basic', async () => {
+  const route: Route = { origin: 'https://origin.example' }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  const res = await authorize(createAuthRequest('GET', basicAuthHeader), route, [basicAuthMethod], callback)
+  expect(res.status).toBe(200)
+  expect(forwardedReq?.headers.get('Authorization')).toBeNull()
+})
+
+// --- IP rules ---
+
+test('A missing CF-Connecting-IP header never satisfies an IP rule', async () => {
+  const route: Route = { origin: 's3://eu-central-1.bucket', auth: [{ type: 'ip', allow: ['0.0.0.0/0'] }] }
+  const res = await authorize(new Request('https://example.com'), route, undefined, mockCallback)
+  expect(res.status).toBe(401)
+})
+
+// --- Unicode credentials ---
+
+test('A credential stored in NFD authenticates a client that sends NFC', async () => {
+  const route: Route = { origin: 's3://eu-central-1.bucket', auth: [{ type: 'basic', username: 'u', password: 'e\u0301' }] }
+  const header = 'Basic ' + btoa(String.fromCharCode(...new TextEncoder().encode('u:\u00e9')))
+  const res = await authorize(createAuthRequest('GET', header), route, undefined, mockCallback)
+  expect(res.status).toBe(200)
 })

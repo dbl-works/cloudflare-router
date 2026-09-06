@@ -15,6 +15,8 @@ export interface Route {
   origin: string
   auth?: AuthMethods[]
   edgeCacheTtl?: number
+  /** Serve index.html for navigations. Defaults to true for storage origins such as s3://. */
+  spa?: boolean
 }
 
 export type Routes = Record<string, string | Route>
@@ -22,11 +24,6 @@ export type Routes = Record<string, string | Route>
 export interface Config {
   routes: Routes
   auth?: AuthMethods[]
-  isS3Site?: boolean
   edgeCacheTtl?: number
-}
-
-export const DEFAULT_CONFIG: Config = {
-  routes: {},
-  edgeCacheTtl: 86400,
+  spa?: boolean
 }

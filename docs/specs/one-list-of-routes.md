@@ -118,6 +118,7 @@ export interface Route {
   origin: string
   auth?: AuthMethods[]
   edgeCacheTtl?: number
+  spa?: boolean
 }
 
 export type Routes = Record<string, string | Route>
@@ -126,7 +127,7 @@ export interface Config {
   routes: Routes
   auth?: AuthMethods[]
   edgeCacheTtl?: number
-  isS3Site?: boolean
+  spa?: boolean
 }
 ```
 
