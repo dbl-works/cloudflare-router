@@ -1,20 +1,27 @@
 import { Route, AuthMethods } from '../config'
 
 const getCredentialsFromAuthorizationHeader = (authorizationHeader: string | undefined | null) => {
-  const encoded = (authorizationHeader || '').replace('Basic ', '')
-  const buffer = Uint8Array.from(atob(encoded), (character) =>
-    character.charCodeAt(0)
-  );
-  const decoded = new TextDecoder().decode(buffer).normalize();
-  const separatorIndex = decoded.indexOf(':');
-
-  if (separatorIndex === -1) {
-    return { username: decoded, password: '' };
+  if (!authorizationHeader || !authorizationHeader.startsWith('Basic ')) {
+    return null;
   }
+  try {
+    const encoded = authorizationHeader.slice(6)
+    const buffer = Uint8Array.from(atob(encoded), (character) =>
+      character.charCodeAt(0)
+    );
+    const decoded = new TextDecoder().decode(buffer).normalize();
+    const separatorIndex = decoded.indexOf(':');
 
-  return {
-    username: decoded.slice(0, separatorIndex),
-    password: decoded.slice(separatorIndex + 1),
+    if (separatorIndex === -1) {
+      return { username: decoded, password: '' };
+    }
+
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    }
+  } catch {
+    return null;
   }
 }
 
@@ -50,37 +57,47 @@ export const authorize = async (request: Request, route: Route | undefined, conf
 
   const authRules = route.auth ?? configAuth
 
-  if (authRules && authRules.length > 0) {
-    let authorized = false;
-
-    for (const authConfig of authRules) {
-      if (authConfig.type === 'ip') {
-        const clientIp = request.headers.get('CF-Connecting-IP') || '0.0.0.0/0'
-        if (authConfig.allow.includes(clientIp)) {
-          authorized = true;
-          break;
-        }
-      } else if (authConfig.type === 'basic') {
-        const attemptedAuth = getCredentialsFromAuthorizationHeader(request.headers.get('Authorization'))
-        const userMatch = await timingSafeEqual(authConfig.username, attemptedAuth.username);
-        const passMatch = await timingSafeEqual(authConfig.password, attemptedAuth.password);
-        
-        if (userMatch && passMatch) {
-          authorized = true;
-          break;
+    if (authRules && authRules.length > 0) {
+      let authorized = false;
+      let usedBasicAuth = false;
+  
+      for (const authConfig of authRules) {
+        if (authConfig.type === 'ip') {
+          const clientIp = request.headers.get('CF-Connecting-IP') || '0.0.0.0/0'
+          if (authConfig.allow.includes(clientIp)) {
+            authorized = true;
+            break;
+          }
+        } else if (authConfig.type === 'basic') {
+          const attemptedAuth = getCredentialsFromAuthorizationHeader(request.headers.get('Authorization'))
+          if (attemptedAuth) {
+            const userMatch = await timingSafeEqual(authConfig.username, attemptedAuth.username);
+            const passMatch = await timingSafeEqual(authConfig.password, attemptedAuth.password);
+            
+            if (userMatch && passMatch) {
+              authorized = true;
+              usedBasicAuth = true;
+              break;
+            }
+          }
         }
       }
-    }
 
-    if (!authorized) {
-      return new Response("Unauthorized.", {
-        status: 401,
-        headers: {
-          "WWW-Authenticate": 'Basic realm="Cloudflare Router", charset="UTF-8"',
-        },
-      })
+      if (!authorized) {
+        return new Response("Unauthorized.", {
+          status: 401,
+          headers: {
+            "WWW-Authenticate": 'Basic realm="Cloudflare Router", charset="UTF-8"',
+          },
+        })
+      }
+  
+      if (usedBasicAuth) {
+        const newReq = new Request(request)
+        newReq.headers.delete('Authorization')
+        return callback(newReq)
+      }
     }
+  
+    return callback(request)
   }
-
-  return callback(request)
-}

@@ -52,14 +52,28 @@ export default function normalizeRequest(request: Request, routes: Config['route
   const originalUrlWithoutScheme = originalUrl.replace(/^https?:\/\//, '')
   const path = originalUrlWithoutScheme.replace(/^.*?\//gi, '')
 
-  for (const [key, value] of Object.entries(routes)) {
+  const sortedRoutes = Object.entries(routes).sort((a, b) => b[0].length - a[0].length)
+
+  for (const [key, value] of sortedRoutes) {
     let url = originalUrl
     let newUrl = typeof value === 'string' ? value : value.origin
     const route = typeof value === 'string' ? { origin: value } : value
     if (url.includes(key)) {
 
-      if (!originalUrlWithoutScheme.startsWith(key) && !key.startsWith('/')) {
-        continue
+      if (key.startsWith('/')) {
+        const matchIndex = url.indexOf(key)
+        const nextChar = url[matchIndex + key.length]
+        if (nextChar !== undefined && nextChar !== '/' && nextChar !== '?' && nextChar !== '#') {
+          continue
+        }
+      } else {
+        if (!originalUrlWithoutScheme.startsWith(key)) {
+          continue
+        }
+        const nextChar = originalUrlWithoutScheme[key.length]
+        if (nextChar !== undefined && nextChar !== '/' && nextChar !== ':' && nextChar !== '?' && nextChar !== '#') {
+          continue
+        }
       }
 
       const singlePageApp = isS3Site ? newUrl.startsWith('s3://') : true

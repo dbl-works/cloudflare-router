@@ -12,9 +12,9 @@ export const createRouter = (config: Config) => {
   return {
     async fetch(request: Request, _env: Record<string, unknown>, _ctx: ExecutionContext): Promise<Response> {
       const { request: normalizedReq, route } = normalizeRequest(request, config.routes, config.isS3Site)
-      return authorize(request, route, config.auth, async () => {
-        const edgeCacheTtl = route?.edgeCacheTtl ?? config.edgeCacheTtl ?? 0
-        return handleRequest(normalizedReq, edgeCacheTtl)
+      return authorize(normalizedReq, route, config.auth, async (authReq) => {
+        const edgeCacheTtl = route?.edgeCacheTtl ?? config.edgeCacheTtl ?? 86400
+        return handleRequest(authReq, edgeCacheTtl)
       })
     }
   }

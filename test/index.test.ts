@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest'
+import { ExecutionContext } from '@cloudflare/workers-types'
 import { createRouter } from '../src/cloudflare-router'
 import { Config } from '../src/config'
 import handleRequest from '../src/utils/handle-request'
@@ -28,26 +29,24 @@ test('it throws if deployments key is present', () => {
 
 test('A route without edgeCacheTtl uses the top-level value', async () => {
   const router = createRouter({ routes: { 'example.com': 's3://bucket' }, edgeCacheTtl: 123 })
-  await router.fetch(new Request('https://example.com'), {}, {} as any)
+  await router.fetch(new Request('https://example.com'), {}, {} as ExecutionContext)
   expect(handleRequest).toHaveBeenCalledWith(expect.any(Request), 123)
 })
 
 test('A route with edgeCacheTtl overrides the top-level value', async () => {
   const router = createRouter({ routes: { 'example.com': { origin: 's3://bucket', edgeCacheTtl: 456 } }, edgeCacheTtl: 123 })
-  await router.fetch(new Request('https://example.com'), {}, {} as any)
+  await router.fetch(new Request('https://example.com'), {}, {} as ExecutionContext)
   expect(handleRequest).toHaveBeenCalledWith(expect.any(Request), 456)
 })
 
 test('A route with edgeCacheTtl: 0 disables the cache under a non-zero default', async () => {
   const router = createRouter({ routes: { 'example.com': { origin: 's3://bucket', edgeCacheTtl: 0 } }, edgeCacheTtl: 123 })
-  await router.fetch(new Request('https://example.com'), {}, {} as any)
+  await router.fetch(new Request('https://example.com'), {}, {} as ExecutionContext)
   expect(handleRequest).toHaveBeenCalledWith(expect.any(Request), 0)
 })
 
-test('A config with no edgeCacheTtl anywhere uses the documented default (0)', async () => {
-  // Config interface doesn't enforce 86400 by itself, it defaults in cloudflare-router if omitted?
-  // Wait, DEFAULT_CONFIG has 86400, but users don't have to use it.
+test('A config with no edgeCacheTtl anywhere uses the documented default (86400)', async () => {
   const router = createRouter({ routes: { 'example.com': 's3://bucket' } })
-  await router.fetch(new Request('https://example.com'), {}, {} as any)
-  expect(handleRequest).toHaveBeenCalledWith(expect.any(Request), 0)
+  await router.fetch(new Request('https://example.com'), {}, {} as ExecutionContext)
+  expect(handleRequest).toHaveBeenCalledWith(expect.any(Request), 86400)
 })
