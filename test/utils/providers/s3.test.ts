@@ -33,6 +33,7 @@ test.each([
   ['an IP address', 's3://eu-central-1.192.168.1.1', /not an IP address/],
   ['a reserved prefix', 's3://eu-central-1.xn--bucket', /reserved prefix/],
   ['a reserved suffix', 's3://eu-central-1.bucket-s3alias', /reserved suffix/],
+  ['the Multi-Region Access Point suffix', 's3://eu-central-1.assets.mrap', /reserved suffix/],
   ['an encoded dot segment in the prefix', 's3://eu-central-1.assets.example/%2e%2e/private', /prefix is percent-encoded/],
   ['a dot segment in the prefix', 's3://eu-central-1.bucket/../other', /prefix contains a "\." or "\.\." segment/],
   ['a backslash in the prefix', 's3://eu-central-1.bucket/foo\\bar', /prefix contains a backslash/],

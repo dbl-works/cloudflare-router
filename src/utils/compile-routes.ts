@@ -30,8 +30,22 @@ export { canonicalPath }
 const invalid = (key: string, reason: string): Error =>
   new Error(`Invalid route "${key}": ${reason}`)
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+/**
+ * A plain object: a normal or null prototype, so no inherited field can pose
+ * as configuration. A Map, a Date or an Object.create(...) value is not one.
+ */
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+/** Own fields only. Together with `isPlainObject` this is the only way configuration is read. */
+const ownFields = (value: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(value))
+
+/** Every index of a list, holes included, so a sparse array cannot hide an undefined rule. */
+const everyIndex = (value: unknown[]): unknown[] => Array.from(value)
 
 // ---------------------------------------------------------------------------
 // Configuration shape. Every value is checked at runtime, because a
@@ -72,8 +86,10 @@ function checkTtl(where: string, value: unknown): number | undefined {
 function checkAuth(where: string, value: unknown): AuthMethods[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value)) throw new Error(`"auth" in ${where} must be a list of rules.`)
-  return value.map((rule): AuthMethods => {
-    if (!isPlainObject(rule) || typeof rule.type !== 'string' || !(rule.type in RULE_KEYS)) {
+  return everyIndex(value).map((entry): AuthMethods => {
+    if (!isPlainObject(entry)) throw new Error(`"auth" in ${where} has a rule that is not an object.`)
+    const rule = ownFields(entry)
+    if (typeof rule.type !== 'string' || !Object.hasOwn(RULE_KEYS, rule.type)) {
       throw new Error(`"auth" in ${where} has a rule without a type of "basic" or "ip".`)
     }
     rejectUnknownKeys(`a ${rule.type} rule of ${where}`, rule, RULE_KEYS[rule.type])
@@ -84,7 +100,7 @@ function checkAuth(where: string, value: unknown): AuthMethods[] | undefined {
       return { type: 'basic', username: rule.username, password: rule.password }
     }
     if (!Array.isArray(rule.allow) || rule.allow.length === 0) throw new Error(`an ip rule of ${where} needs at least one address in "allow".`)
-    const allow = rule.allow.map((address) => {
+    const allow = everyIndex(rule.allow).map((address) => {
       const canonical = typeof address === 'string' ? canonicalIp(address) : undefined
       if (canonical === undefined) throw new Error(`an ip rule of ${where} lists "${String(address)}", which is not one IP address. CIDR ranges are not supported.`)
       return canonical
@@ -265,10 +281,11 @@ function rejectCycles(routes: CompiledRoute[]): void {
  * routes. Throws on the first defect, so a bad configuration fails at
  * startup instead of on a request. Compile once and reuse the result.
  */
-export function compileRoutes(config: unknown): CompiledRoute[] {
-  if (!isPlainObject(config)) throw new Error('The configuration must be an object.')
+export function compileRoutes(input: unknown): CompiledRoute[] {
+  if (!isPlainObject(input)) throw new Error('The configuration must be a plain object.')
+  const config = ownFields(input)
   rejectUnknownKeys('the configuration', config, CONFIG_KEYS)
-  if (!isPlainObject(config.routes)) throw new Error('"routes" must be an object that maps a key to an origin or a route.')
+  if (!isPlainObject(config.routes)) throw new Error('"routes" must be a plain object that maps a key to an origin or a route.')
 
   const defaults = {
     auth: checkAuth('the configuration', config.auth),
@@ -277,10 +294,10 @@ export function compileRoutes(config: unknown): CompiledRoute[] {
     cors: checkFlag('the configuration', 'cors', config.cors),
   }
 
-  const compiled: CompiledRoute[] = Object.entries(config.routes).map(([key, value]) => {
+  const compiled: CompiledRoute[] = Object.entries(ownFields(config.routes)).map(([key, value]) => {
     const where = `route "${key}"`
-    if (typeof value !== 'string' && !isPlainObject(value)) throw invalid(key, 'the value must be an origin string or a route object.')
-    const route: Record<string, unknown> = typeof value === 'string' ? { origin: value } : value
+    if (typeof value !== 'string' && !isPlainObject(value)) throw invalid(key, 'the value must be an origin string or a plain route object.')
+    const route: Record<string, unknown> = typeof value === 'string' ? { origin: value } : ownFields(value)
     rejectUnknownKeys(where, route, ROUTE_KEYS)
 
     const { host, path } = parseRouteKey(key)

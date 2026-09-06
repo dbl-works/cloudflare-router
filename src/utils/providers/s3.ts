@@ -18,7 +18,7 @@ function bucketError(bucket: string): string | undefined {
   if (bucket.startsWith('xn--') || bucket.startsWith('sthree-') || bucket.startsWith('amzn-s3-demo-')) {
     return 'a bucket name does not start with a reserved prefix'
   }
-  if (bucket.endsWith('-s3alias') || bucket.endsWith('--ol-s3') || bucket.endsWith('--x-s3') || bucket.endsWith('--table-s3')) {
+  if (['-s3alias', '--ol-s3', '--x-s3', '--table-s3', '.mrap'].some((suffix) => bucket.endsWith(suffix))) {
     return 'a bucket name does not end with a reserved suffix'
   }
   return undefined

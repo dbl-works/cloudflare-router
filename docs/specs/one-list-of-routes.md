@@ -217,7 +217,10 @@ shipped validation therefore rests on three invariants, each in one place:
    no empty or dot segment, and only characters the URL parser never
    rewrites. The invariant: parsing a plain path as a URL is the identity.
 2. **Every runtime value is validated.** Types do not protect a JavaScript
-   consumer. Unknown keys on the config, a route or an auth rule throw, which
+   consumer. The config, a route object and a rule must be plain objects with
+   a normal or null prototype, and only own fields are read, so an inherited
+   `auth: []` cannot override a protected default. A sparse list throws.
+   Unknown keys on the config, a route or an auth rule throw, which
    also covers the removed `deployments` and `isS3Site` keys with a message
    that names the replacement. Flags must be booleans, the TTL a whole
    number, rules complete, and each IP entry one canonical address.

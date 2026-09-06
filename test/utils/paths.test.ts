@@ -75,11 +75,16 @@ test.each([
   ['Example.COM', 'example.com'],
   ['exämple.com', 'xn--exmple-cua.com'],
   ['127.0.0.1', '127.0.0.1'],
+  ['localhost', 'localhost'],
+  ['example.com.', 'example.com.'],
 ])('parseHostname canonicalizes %s', (host, canonical) => {
   expect(parseHostname(host)).toBe(canonical)
 })
 
-test.each(['', 'example.com:443', 'user@example.com', 'example.com/path', '*.example.com', 'exam ple.com', 'https:', '[::1]', 'a%62c.com', 'exa\\mple.com'])(
+test.each([
+  '', 'example.com:443', 'user@example.com', 'example.com/path', '*.example.com', 'exam ple.com', 'https:', '[::1]', 'a%62c.com', 'exa\\mple.com',
+  '_', '.', 'foo_bar.example.com', '123', '0x7f.1', '-example.com', 'example-.com', `${'a'.repeat(64)}.com`, 'example..com',
+])(
   'parseHostname rejects %j', (host) => {
     expect(parseHostname(host)).toBeUndefined()
   },

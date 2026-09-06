@@ -124,8 +124,8 @@ test.each([
   ['an unknown config key', { routes: {}, edgeCacheTTL: 5 }, /Unknown key "edgeCacheTTL" in the configuration/],
   ['a removed config key', { routes: {}, deployments: [] }, /"deployments" key is removed in v3. Use "auth"/],
   ['the removed isS3Site key', { routes: {}, isS3Site: false }, /"isS3Site" key is removed in v3. Use "spa"/],
-  ['routes that are not an object', { routes: [] }, /"routes" must be an object/],
-  ['a route value that is a number', { routes: { 'a.example.com': 5 } }, /origin string or a route object/],
+  ['routes that are not an object', { routes: [] }, /"routes" must be a plain object/],
+  ['a route value that is a number', { routes: { 'a.example.com': 5 } }, /origin string or a plain route object/],
   ['an unknown route key', { routes: { 'a.example.com': { origin: S3, ttl: 5 } } }, /Unknown key "ttl" in route "a.example.com"/],
   ['a string spa on a route', { routes: { 'a.example.com': { origin: S3, spa: 'false' } } }, /"spa" in route "a.example.com" must be true or false/],
   ['a string cors at the top level', { cors: 'false', routes: { 'a.example.com': S3 } }, /"cors" in the configuration must be true or false/],
@@ -141,6 +141,29 @@ test.each([
   ['an ip rule with a CIDR range', { auth: [{ type: 'ip', allow: ['10.0.0.0/8'] }], routes: { 'a.example.com': S3 } }, /"10.0.0.0\/8", which is not one IP address. CIDR/],
   ['an ip rule with a hostname', { auth: [{ type: 'ip', allow: ['vpn.example.com'] }], routes: { 'a.example.com': S3 } }, /not one IP address/],
   ['an ip rule with an out-of-range octet', { auth: [{ type: 'ip', allow: ['256.1.1.1'] }], routes: { 'a.example.com': S3 } }, /not one IP address/],
+])('compileRoutes rejects %s', (_name, config, message) => {
+  expect(() => compileRoutes(config)).toThrow(message)
+})
+
+test('inherited route fields never count as configuration', () => {
+  const inherited = Object.create({ origin: 'https://origin.example', auth: [] })
+  expect(() => compileRoutes({ auth: [basic], routes: { 'admin.example.com': inherited } })).toThrow(/plain route object/)
+  const partly = Object.assign(Object.create({ auth: [] }), { origin: 'https://origin.example' })
+  expect(() => compileRoutes({ auth: [basic], routes: { 'admin.example.com': partly } })).toThrow(/plain route object/)
+})
+
+test('a null-prototype route object is accepted and read by own fields', () => {
+  const route = Object.assign(Object.create(null), { origin: S3, auth: [] })
+  expect(one({ 'a.example.com': route }, { auth: [basic] }).auth).toEqual([])
+})
+
+test.each([
+  ['a Map as routes', { routes: new Map() }, /"routes" must be a plain object/],
+  ['a Date as a route', { routes: { 'a.example.com': new Date() } }, /plain route object/],
+  ['a class instance as the config', Object.assign(Object.create({ routes: {} }), {}), /must be a plain object/],
+  ['a rule with a prototype', { auth: [Object.create({ type: 'ip', allow: ['1.1.1.1'] })], routes: { 'a.example.com': S3 } }, /rule that is not an object/],
+  ['a sparse auth list', { auth: new Array(1), routes: { 'a.example.com': S3 } }, /rule that is not an object/],
+  ['a sparse allow list', { auth: [{ type: 'ip', allow: Object.assign(new Array(2), { 0: '1.1.1.1' }) }], routes: { 'a.example.com': S3 } }, /not one IP address/],
 ])('compileRoutes rejects %s', (_name, config, message) => {
   expect(() => compileRoutes(config)).toThrow(message)
 })

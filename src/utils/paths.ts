@@ -73,18 +73,30 @@ export const joinPath = (segments: string[]): string => `/${segments.join('/')}`
 export const isPrefix = (prefix: string[], path: string[]): boolean =>
   prefix.length <= path.length && prefix.every((segment, i) => segment === path[i])
 
+// A DNS label: letters, digits and hyphens, 1 to 63 characters, no hyphen at either end.
+const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+const IPV4_LITERAL = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
+
 /**
- * Canonicalizes a hostname the way a browser does: lowercase and punycode.
- * Returns undefined for anything that is not exactly one hostname: a port,
- * credentials, a path, a wildcard, whitespace or an empty string.
+ * Canonicalizes a hostname the way a browser does, lowercase and punycode,
+ * then checks that the result is a DNS name or an IPv4 literal. The URL
+ * parser alone accepts `foo_bar` or turns `123` into `0.0.0.123`, so it is
+ * not a hostname validator. Returns undefined for anything that is not
+ * exactly one hostname: a port, credentials, a path, a wildcard, whitespace,
+ * an empty string, or a name that breaks the DNS label rules.
  */
 export function parseHostname(host: string): string | undefined {
   if (host === '' || /[\s*@:/\\?#%[\]]/.test(host)) return undefined
+  let canonical: string
   try {
     const url = new URL(`https://${host}/`)
     if (url.host !== url.hostname || url.pathname !== '/' || url.username !== '') return undefined
-    return url.hostname
+    canonical = url.hostname
   } catch {
     return undefined
   }
+  if (IPV4_LITERAL.test(canonical)) return canonical === host ? canonical : undefined
+  if (canonical.length > 253) return undefined
+  const labels = canonical.endsWith('.') ? canonical.slice(0, -1).split('.') : canonical.split('.')
+  return labels.every((label) => DNS_LABEL.test(label)) ? canonical : undefined
 }
