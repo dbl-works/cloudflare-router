@@ -1,5 +1,7 @@
 import { test, expect } from 'vitest'
-import { compileRoutes, matchRoute, canonicalPath } from '../../src/utils/compile-routes'
+import { compileRoutes, matchRoute, parseOrigin } from '../../src/utils/compile-routes'
+import { canonicalPath, joinPath } from '../../src/utils/paths'
+import fc from 'fast-check'
 
 const basic = { type: 'basic', username: 'u', password: 'p' } as const
 const ip = { type: 'ip', allow: ['192.168.1.1'] } as const
@@ -116,6 +118,100 @@ test('remainders keep the request shape', () => {
 
 // --- Cycles ---
 
+// --- Runtime configuration validation ---
+
+test.each([
+  ['an unknown config key', { routes: {}, edgeCacheTTL: 5 }, /Unknown key "edgeCacheTTL" in the configuration/],
+  ['a removed config key', { routes: {}, deployments: [] }, /"deployments" key is removed in v3. Use "auth"/],
+  ['the removed isS3Site key', { routes: {}, isS3Site: false }, /"isS3Site" key is removed in v3. Use "spa"/],
+  ['routes that are not an object', { routes: [] }, /"routes" must be an object/],
+  ['a route value that is a number', { routes: { 'a.example.com': 5 } }, /origin string or a route object/],
+  ['an unknown route key', { routes: { 'a.example.com': { origin: S3, ttl: 5 } } }, /Unknown key "ttl" in route "a.example.com"/],
+  ['a string spa on a route', { routes: { 'a.example.com': { origin: S3, spa: 'false' } } }, /"spa" in route "a.example.com" must be true or false/],
+  ['a string cors at the top level', { cors: 'false', routes: { 'a.example.com': S3 } }, /"cors" in the configuration must be true or false/],
+  ['a numeric spa at the top level', { spa: 1, routes: { 'a.example.com': S3 } }, /"spa" in the configuration must be true or false/],
+  ['a string edgeCacheTtl', { routes: { 'a.example.com': { origin: S3, edgeCacheTtl: '60' } } }, /"edgeCacheTtl" in route "a.example.com" must be a whole number/],
+  ['a fractional edgeCacheTtl', { edgeCacheTtl: 1.5, routes: { 'a.example.com': S3 } }, /whole number/],
+  ['auth that is not a list', { auth: {}, routes: { 'a.example.com': S3 } }, /"auth" in the configuration must be a list/],
+  ['a rule without a type', { auth: [{ username: 'u', password: 'p' }], routes: { 'a.example.com': S3 } }, /without a type of "basic" or "ip"/],
+  ['a rule with an unknown type', { auth: [{ type: 'bearer' }], routes: { 'a.example.com': S3 } }, /without a type of "basic" or "ip"/],
+  ['a rule with an unknown key', { auth: [{ type: 'ip', allow: ['1.1.1.1'], deny: [] }], routes: { 'a.example.com': S3 } }, /Unknown key "deny" in a ip rule/],
+  ['a basic rule with an empty password', { auth: [{ type: 'basic', username: 'u', password: '' }], routes: { 'a.example.com': S3 } }, /non-empty username and password/],
+  ['an ip rule with no addresses', { auth: [{ type: 'ip', allow: [] }], routes: { 'a.example.com': S3 } }, /at least one address/],
+  ['an ip rule with a CIDR range', { auth: [{ type: 'ip', allow: ['10.0.0.0/8'] }], routes: { 'a.example.com': S3 } }, /"10.0.0.0\/8", which is not one IP address. CIDR/],
+  ['an ip rule with a hostname', { auth: [{ type: 'ip', allow: ['vpn.example.com'] }], routes: { 'a.example.com': S3 } }, /not one IP address/],
+  ['an ip rule with an out-of-range octet', { auth: [{ type: 'ip', allow: ['256.1.1.1'] }], routes: { 'a.example.com': S3 } }, /not one IP address/],
+])('compileRoutes rejects %s', (_name, config, message) => {
+  expect(() => compileRoutes(config)).toThrow(message)
+})
+
+test('IPv6 addresses in rules are canonicalized', () => {
+  const route = one({ 'a.example.com': { origin: S3, auth: [{ type: 'ip', allow: ['2001:DB8::1', '2001:db8:0:0:0:0:0:2', '::FFFF:1.2.3.4'] }] } })
+  expect(route.auth).toEqual([{ type: 'ip', allow: ['2001:db8::1', '2001:db8::2', '::ffff:102:304'] }])
+})
+
+// --- Origins ---
+
+test.each([
+  ['s3://eu-central-1.bucket/app', { kind: 'url', storage: true, host: 'bucket.s3.eu-central-1.amazonaws.com', port: '', segments: ['app'] }],
+  ['https://origin.example/base/', { kind: 'url', storage: false, host: 'origin.example', port: '', segments: ['base'] }],
+  ['https://Origin.Example:8443', { kind: 'url', storage: false, host: 'origin.example', port: '8443', segments: [] }],
+  ['origin.example/base', { kind: 'url', storage: false, host: 'origin.example', port: '', segments: ['base'] }],
+  ['/new-path/x', { kind: 'path', segments: ['new-path', 'x'] }],
+])('parseOrigin accepts %s', (origin, parsed) => {
+  expect(parseOrigin('k', origin)).toEqual(parsed)
+})
+
+test.each([
+  ['an empty origin', '', /non-empty string/],
+  ['a non-string origin', 5, /non-empty string/],
+  ['a query', 'https://origin.example/base?tenant=1', /query or fragment/],
+  ['a fragment', 's3://eu-central-1.bucket/app#x', /query or fragment/],
+  ['an http scheme', 'http://origin.example', /must be an https:\/\/ URL/],
+  ['credentials', 'https://user:pass@origin.example', /credentials/],
+  ['a port out of range', 'https://origin.example:70000', /port "70000" is out of range/],
+  ['a wildcard host', 'https://*.origin.example', /not a valid hostname/],
+  ['a backslash in a path origin', '/foo\\../app', /origin path contains a backslash/],
+  ['a backslash in a URL path', 'https://origin.example/foo\\bar', /origin path contains a backslash/],
+  ['a backslash in the host', 'https://origin\\example.com', /not a valid hostname/],
+  ['an encoded dot segment', 'https://origin.example/%2e%2e/x', /origin path is percent-encoded/],
+  ['a mixed-case encoded dot segment', 'https://origin.example/%2E./x', /origin path is percent-encoded/],
+  ['an encoded slash', 'https://origin.example/a%2Fb', /origin path is percent-encoded/],
+  ['a dot segment', 'https://origin.example/base/../x', /"\." or "\.\." segment/],
+  ['a dot segment in a path origin', '/foo/../app', /"\." or "\.\." segment/],
+  ['an empty segment in a path origin', '/foo//app', /empty segment/],
+  ['a space', 'https://origin.example/my app', /not allowed in a URL path/],
+  ['an invalid s3 shorthand', 's3://bucket/app', /the s3:\/\/ origin has no region.*Write s3:\/\/REGION\.BUCKET/],
+])('parseOrigin rejects %s', (_name, origin, message) => {
+  expect(() => parseOrigin('k', origin)).toThrow(message)
+})
+
+const nastyPiece = fc.constantFrom('/', '//', '\\', '%2F', '%5C', '.', '..', '%2e', '%2e%2e', '%00', '%', 'app', 'a-b.c', '~', '@', ':', '?', '#', ' ', 'é', '..\\')
+const nastyPath = fc.array(nastyPiece, { maxLength: 6 }).map((pieces) => pieces.join(''))
+const origins = fc.oneof(
+  nastyPath.map((path) => `/${path}`),
+  nastyPath.map((path) => `https://origin.example/${path}`),
+  nastyPath.map((path) => `origin.example/${path}`),
+  nastyPath.map((path) => `s3://eu-central-1.bucket/${path}`),
+)
+
+test('property: every accepted origin resolves to a URL whose path the URL parser leaves unchanged', () => {
+  fc.assert(fc.property(origins, (origin) => {
+    let parsed: ReturnType<typeof parseOrigin>
+    try {
+      parsed = parseOrigin('k', origin)
+    } catch {
+      return true
+    }
+    const path = joinPath(parsed.segments)
+    const host = parsed.kind === 'path' ? 'example.com' : parsed.host
+    const url = new URL(`https://${host}${path}`)
+    return url.pathname === (parsed.segments.length === 0 ? '/' : path)
+      && url.hostname === host
+      && parsed.segments.every((segment) => segment !== '.' && segment !== '..' && !segment.includes('\\') && !segment.includes('%'))
+  }), { numRuns: 2000 })
+})
+
 test('a more specific route on the target host breaks a cycle', () => {
   // a → b/legacy → a/v2 → S3. The /v2 route always wins on a for /v2, so the host route is not reachable.
   expect(() => compileRoutes({ routes: {
@@ -137,7 +233,7 @@ test('an origin whose path cannot be canonicalized is rejected, not treated as r
   expect(() => compileRoutes({ routes: {
     'a.example.com': 'https://b.example.com/%2Floop',
     'b.example.com': 'https://a.example.com',
-  } })).toThrow(/encoded slash/)
+  } })).toThrow(/percent-encoded/)
 })
 
 test('a deeper route that never wins is not reachable', () => {

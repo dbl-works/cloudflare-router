@@ -149,6 +149,13 @@ test('A missing CF-Connecting-IP header never satisfies an IP rule', async () =>
   expect((await authorize(request(), route([{ type: 'ip', allow: ['0.0.0.0/0'] }]), mockCallback)).status).toBe(403)
 })
 
+test('IPv6 client addresses compare in canonical form', async () => {
+  const compiled = route([{ type: 'ip', allow: ['2001:db8::1'] }])
+  expect((await authorize(authed('GET', undefined, '2001:DB8:0:0:0:0:0:1'), compiled, mockCallback)).status).toBe(200)
+  expect((await authorize(authed('GET', undefined, '[2001:db8::1]'), compiled, mockCallback)).status).toBe(403)
+  expect((await authorize(authed('GET', undefined, '2001:db8::2'), compiled, mockCallback)).status).toBe(403)
+})
+
 // --- Unicode credentials ---
 
 test('A credential stored in NFD authenticates a client that sends NFC', async () => {

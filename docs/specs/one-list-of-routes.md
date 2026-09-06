@@ -204,30 +204,37 @@ and one list entry.
 
 ### Startup validation
 
-`createRouter` compiles the routes once and rejects:
+Review found that example-driven fixes leave the next spelling of a defect
+open. Rejecting `..` invites `%2e%2e`, rejecting that invites `\..`. The
+shipped validation therefore rests on three invariants, each in one place:
 
-* An empty key, or a key with a scheme, port, wildcard, query, fragment, or
-  whitespace.
-* A key that does not name a host, such as a key that starts with `/`.
-* A key path, or a path origin, with an empty segment, a `.` or `..` segment,
-  or percent-encoding.
-* Two keys that resolve to one route, such as `example.com/admin` and
-  `example.com/admin/`.
-* An origin that is not `https://`, a storage shorthand, a host, or a path.
-* An origin with whitespace, credentials, a query, or a fragment.
-* A storage shorthand that does not match its provider grammar. For the S3
-  provider: a region with an uppercase letter, a bucket of only dots, or a
-  prefix with an empty or a `.`/`..` segment.
-* A `basic` rule without a non-empty username and password.
-* An `ip` rule without at least one address in `allow`.
-* An `edgeCacheTtl` that is not a whole number of seconds, 0 or more.
-* A route with non-empty effective `auth` and a positive `edgeCacheTtl` on an
-  origin that is not a storage origin. See "Edge cache".
-* A chain of routes that leads back to its start, so the worker would fetch
-  itself. Because a key must name a host, the hosts the worker serves are
-  exactly the hosts named in the keys, so this check is complete.
+1. **One path canonicalizer.** `src/utils/paths.ts` decides what a path is.
+   Request paths pass through `canonicalPath`, which decodes for matching,
+   forwards the raw segments, and rejects anything it cannot decode safely.
+   Every configured path passes through `plainPath`, applied to the raw
+   string before any URL parsing: a key path, a path origin, an origin path
+   and a storage prefix. A plain path has no percent-encoding, no backslash,
+   no empty or dot segment, and only characters the URL parser never
+   rewrites. The invariant: parsing a plain path as a URL is the identity.
+2. **Every runtime value is validated.** Types do not protect a JavaScript
+   consumer. Unknown keys on the config, a route or an auth rule throw, which
+   also covers the removed `deployments` and `isS3Site` keys with a message
+   that names the replacement. Flags must be booleans, the TTL a whole
+   number, rules complete, and each IP entry one canonical address.
+3. **Each storage provider parses a complete value.** A provider returns a
+   URL or a reason. The S3 provider applies the AWS region and bucket naming
+   rules and validates the prefix with `plainPath`.
 
-The `isS3Site` key throws like `deployments` does. The message names `spa`.
+On top of these, `createRouter` rejects a key without a host or with a
+scheme, port, wildcard, query or fragment, two keys that resolve to one
+route, an origin that is none of the four forms or that carries credentials,
+a protected route that caches an application origin, and a chain of routes
+that leads back to its start. Because every key names a host, the hosts the
+worker serves are exactly the key hosts, so the self-fetch check is
+complete.
+
+The invariants are tested as properties over generated adversarial input
+with fast-check, in addition to tables of examples.
 
 ### Authentication
 

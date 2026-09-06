@@ -113,11 +113,15 @@ export default createRouter({
 
 ## 6. Startup validation
 
-`createRouter` now validates every route and throws on the first defect. The error names the key and the fix. Run `wrangler dev` after the upgrade. A key with a scheme or port, two keys that differ only by a trailing slash, an `s3://` origin without a region, or an origin that points at the route host all throw. In v2 these defects produced a silent 404 or an error on the first request.
+`createRouter` now validates the complete configuration and throws on the first defect. The error names the key and the fix. Run `wrangler dev` after the upgrade. In v2 these defects produced a silent 404 or an error on the first request.
 
-`createRouter` also throws on a `basic` rule without a username and password. It throws on an `ip` rule without an address in `allow`. It throws on an `edgeCacheTtl` that is not a whole number of seconds. It throws on a key or an origin with whitespace, a query, or a fragment.
+Three rules cover most checks:
 
-The `s3://` shorthand grammar is tighter. A region holds lowercase letters, digits, and hyphens. A bucket holds one or more such labels joined by single dots. A prefix must not contain an empty, `.`, or `..` segment. An uppercase region, a bucket of only dots, or `/../` in the prefix now throws.
+1. Every configured path is plain: no percent-encoding, no backslash, no empty or `.` or `..` segment, and only URL path characters. This applies to key paths, path origins, origin paths and `s3://` prefixes.
+2. Every value is checked at runtime. An unknown key on the config, a route or an auth rule throws. `spa` and `cors` must be booleans. `edgeCacheTtl` must be a whole number. A `basic` rule needs a username and a password. Each `ip` entry must be one IPv4 or IPv6 address. A CIDR range such as `10.0.0.0/8` throws, where v2 silently never matched it.
+3. An `s3://` shorthand must be a complete valid value: an AWS region, a bucket name that follows the AWS rules, and a plain prefix.
+
+`createRouter` also rejects a key with a scheme or port, two keys that differ only by a trailing slash, an origin with credentials, and an origin that leads back to a route.
 
 ## 7. Replace `isS3Site` with `spa`
 

@@ -111,28 +111,27 @@ An origin has one of four forms:
 | `origin.example/base`            | The same, with `https://` added                                 |
 | `/new-path`                      | The same host with a new path prefix                            |
 
-`createRouter` validates every route at startup and throws on the first defect. The message names the key and the fix. It rejects:
+`createRouter` validates the complete configuration at startup and throws on the first defect. The message names the key and the fix. Three rules cover every check:
 
-- An empty key, a key with a scheme, a port, a wildcard, whitespace, a query, or a fragment.
-- A key that does not name a host, such as a key that starts with `/`.
+1. **Every path is plain.** A key path, a path origin, an origin path and an `s3://` prefix pass through one validator. A plain path has no percent-encoding, no backslash, no empty segment, no `.` or `..` segment, and only characters that the URL parser never rewrites. Parsing a plain path as a URL returns it unchanged, so no later normalization can move it. The same canonicalizer handles request paths, where it decodes for matching and rejects what it cannot decode safely.
+2. **Every value is checked at runtime.** TypeScript types do not protect a JavaScript consumer. An unknown key on the config, a route or an auth rule throws. `spa` and `cors` must be `true` or `false`. `edgeCacheTtl` must be a whole number of seconds, 0 or more. A `basic` rule needs a non-empty username and password. An `ip` rule needs at least one address, and each entry must be one IPv4 or IPv6 address. Addresses compare in canonical form, so `2001:DB8::1` equals `2001:db8:0:0:0:0:0:1`.
+3. **Every storage shorthand parses as a complete value.** The `s3://` provider applies the AWS rules for a region and a bucket name: 3 to 63 characters, lowercase letters, digits, dots and hyphens, each label starting and ending with a letter or digit, no IP address form, no reserved prefix or suffix.
+
+On top of these, `createRouter` rejects:
+
+- A key that does not name a host, or has a scheme, a port, a wildcard, a query, or a fragment.
 - Two keys that resolve to one route, such as `example.com/admin` and `example.com/admin/`.
-- An origin that is not `https://`, an `s3://` shorthand, a host, or a path.
-- An origin with whitespace, credentials, a query, or a fragment.
-- An origin with a `.` or `..` segment, encoded or not, or with an encoded slash or control character in its path.
-- An `s3://` origin that does not have the form `s3://REGION.BUCKET` or `s3://REGION.BUCKET/PREFIX`. A label holds lowercase letters, digits, and hyphens, and does not start or end with a hyphen. A region is one label. A bucket is one or more labels joined by single dots. A prefix must not contain an empty segment or percent-encoding.
-- A `basic` auth rule without a non-empty username and password.
-- An `ip` auth rule without at least one address in `allow`.
-- An `edgeCacheTtl` that is not a whole number of seconds, 0 or more.
+- An origin that is not `https://`, an `s3://` shorthand, a host, or a path. An origin with credentials, a query, or a fragment.
 - A route with non-empty effective `auth` and a positive `edgeCacheTtl` on an origin that is not a storage origin. See the note on caching above.
-- A chain of routes that leads back to its start, because the worker would fetch itself.
+- A chain of routes that leads back to its start, because the worker would fetch itself. Every key names a host, so the hosts the worker serves are exactly the key hosts and this check is complete.
 
-The hosts the worker serves are exactly the hosts the keys name, so this self-fetch check is complete.
+The test suite checks the first rule as a property over generated inputs, not only as examples.
 
 ## Basic Authentication & IP Restrictions
 
 You can protect specific routes by defining basic auth or IP restrictions per route, or globally in the config.
 
-An `ip` rule lists exact client IP addresses. CIDR ranges are not supported. The client IP comes from the `CF-Connecting-IP` header that Cloudflare sets. A request without that header never satisfies an `ip` rule.
+An `ip` rule lists exact client IP addresses, IPv4 or IPv6. CIDR ranges are not supported, and a range in `allow` throws at startup. The client IP comes from the `CF-Connecting-IP` header that Cloudflare sets. A request without that header never satisfies an `ip` rule.
 
 A failed request gets a `401` with a Basic challenge only when the route has a `basic` rule. A route with IP rules alone answers `403` without a challenge, so a browser never collects credentials that no rule can use.
 

@@ -7,12 +7,14 @@ import { s3 } from './s3'
 export interface StorageProvider {
   /** URL scheme of the shorthand, without the colon. */
   scheme: string
-  /** Matches a complete, valid shorthand. */
-  shorthand: RegExp
   /** Human-readable form of the shorthand, for error messages. */
   usage: string
-  /** Converts a valid shorthand to an HTTPS URL. */
-  resolve(origin: string): string
+  /**
+   * Parses one complete shorthand. Returns the HTTPS URL, or the reason the
+   * shorthand is invalid. Every rule of the provider lives here, so a
+   * shorthand is either fully valid or rejected with a reason.
+   */
+  parse(origin: string): { url: string } | { error: string }
 }
 
 const PROVIDERS: StorageProvider[] = [s3]

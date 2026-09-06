@@ -1,10 +1,12 @@
-import { AuthMethods, Config, Route } from '../config'
-import { resolveOrigin } from './resolve-origin'
+import { AuthMethods } from '../config'
 import { providerFor } from './providers'
+import { CanonicalPath, canonicalPath, isPrefix, joinPath, parseHostname, plainPath } from './paths'
+import { canonicalIp } from './ip'
 
 /**
- * A route with every default resolved. `auth`, `edgeCacheTtl` and `spa`
- * follow one rule: the route value, then the config value, then the default.
+ * A route with every default resolved. `auth`, `edgeCacheTtl`, `spa` and
+ * `cors` follow one rule: the route value, then the config value, then the
+ * default.
  */
 export interface CompiledRoute {
   key: string
@@ -13,6 +15,7 @@ export interface CompiledRoute {
   /** Path segments of the key. Empty for a host-only key. */
   path: string[]
   origin: string
+  /** Rules with canonical IP addresses. */
   auth: AuthMethods[]
   edgeCacheTtl: number
   spa: boolean
@@ -21,93 +24,158 @@ export interface CompiledRoute {
   stripBasicCredentials: boolean
 }
 
-/** The request path, split for matching and for forwarding. */
-export interface CanonicalPath {
-  /** Percent-decoded segments, for matching. */
-  decoded: string[]
-  /** Segments as the client sent them, for forwarding. */
-  raw: string[]
-  trailingSlash: boolean
-}
+export type { CanonicalPath }
+export { canonicalPath }
 
 const invalid = (key: string, reason: string): Error =>
   new Error(`Invalid route "${key}": ${reason}`)
 
-const stripTrailingSlashes = (path: string): string => path.replace(/\/+$/, '')
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/**
- * Splits a configured path into segments. A configured path is plain: no
- * empty segments, no dot segments, no percent-encoding.
- */
-function parseSegments(path: string, key: string): string[] {
-  const trimmed = stripTrailingSlashes(path)
-  if (trimmed === '') return []
-  const segments = trimmed.split('/').slice(1)
-  for (const segment of segments) {
-    if (segment === '') throw invalid(key, `"${path}" must not contain empty segments.`)
-    if (segment === '.' || segment === '..') throw invalid(key, `"${path}" must not contain "." or ".." segments.`)
-    if (segment.includes('%')) throw invalid(key, `"${path}" must not be percent-encoded.`)
-  }
-  return segments
+// ---------------------------------------------------------------------------
+// Configuration shape. Every value is checked at runtime, because a
+// JavaScript consumer has no types, and a truthy string must not open a
+// bypass.
+// ---------------------------------------------------------------------------
+
+const CONFIG_KEYS = ['routes', 'auth', 'edgeCacheTtl', 'spa', 'cors']
+const ROUTE_KEYS = ['origin', 'auth', 'edgeCacheTtl', 'spa', 'cors']
+const RULE_KEYS: Record<string, string[]> = { basic: ['type', 'username', 'password'], ip: ['type', 'allow'] }
+const REMOVED_KEYS: Record<string, string> = {
+  deployments: 'The "deployments" key is removed in v3. Use "auth" per route or at the top level instead.',
+  isS3Site: 'The "isS3Site" key is removed in v3. Use "spa" per route or at the top level instead.',
 }
+
+function rejectUnknownKeys(where: string, value: Record<string, unknown>, allowed: string[]): void {
+  for (const name of Object.keys(value)) {
+    if (allowed.includes(name)) continue
+    if (name in REMOVED_KEYS) throw new Error(REMOVED_KEYS[name])
+    throw new Error(`Unknown key "${name}" in ${where}. Allowed keys: ${allowed.join(', ')}.`)
+  }
+}
+
+/** Validates an explicit flag. Undefined means "not set". */
+function checkFlag(where: string, name: string, value: unknown): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') throw new Error(`"${name}" in ${where} must be true or false.`)
+  return value
+}
+
+function checkTtl(where: string, value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error(`"edgeCacheTtl" in ${where} must be a whole number of seconds, 0 or more.`)
+  return value
+}
+
+/** Validates auth rules and canonicalizes their IP addresses. Undefined means "not set". */
+function checkAuth(where: string, value: unknown): AuthMethods[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) throw new Error(`"auth" in ${where} must be a list of rules.`)
+  return value.map((rule): AuthMethods => {
+    if (!isPlainObject(rule) || typeof rule.type !== 'string' || !(rule.type in RULE_KEYS)) {
+      throw new Error(`"auth" in ${where} has a rule without a type of "basic" or "ip".`)
+    }
+    rejectUnknownKeys(`a ${rule.type} rule of ${where}`, rule, RULE_KEYS[rule.type])
+    if (rule.type === 'basic') {
+      if (typeof rule.username !== 'string' || rule.username === '' || typeof rule.password !== 'string' || rule.password === '') {
+        throw new Error(`a basic rule of ${where} needs a non-empty username and password.`)
+      }
+      return { type: 'basic', username: rule.username, password: rule.password }
+    }
+    if (!Array.isArray(rule.allow) || rule.allow.length === 0) throw new Error(`an ip rule of ${where} needs at least one address in "allow".`)
+    const allow = rule.allow.map((address) => {
+      const canonical = typeof address === 'string' ? canonicalIp(address) : undefined
+      if (canonical === undefined) throw new Error(`an ip rule of ${where} lists "${String(address)}", which is not one IP address. CIDR ranges are not supported.`)
+      return canonical
+    })
+    return { type: 'ip', allow }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Keys and origins. Every path goes through `plainPath`, so the URL parser
+// can never change a configured value after validation.
+// ---------------------------------------------------------------------------
 
 /**
  * Splits a route key into a canonical host and path segments.
  *
  *   'admin.example.com'  → host 'admin.example.com', path []
  *   'example.com/admin/' → host 'example.com',       path ['admin']
- *
- * The host is canonicalized the way a browser does it: lowercase and
- * punycode. A trailing slash on the path has no meaning.
  */
 export function parseRouteKey(key: string): { host: string, path: string[] } {
-  if (key === '' || /\s/.test(key)) throw invalid(key, 'a key must not be empty or contain whitespace.')
+  if (key === '') throw invalid(key, 'a key must not be empty.')
   if (key.includes('://')) throw invalid(key, 'a key must not contain a scheme. Write "example.com" or "example.com/path".')
-  if (/[?#]/.test(key)) throw invalid(key, 'a key must not contain a query or fragment. Routes match the host and path only.')
   if (key.startsWith('/')) throw invalid(key, 'a key must name a host. Write "example.com/path" instead of "/path".')
 
   const slash = key.indexOf('/')
   const hostPart = slash === -1 ? key : key.slice(0, slash)
-  const path = slash === -1 ? [] : parseSegments(key.slice(slash), key)
+  const pathPart = slash === -1 ? '' : key.slice(slash)
 
+  if (/[?#]/.test(key)) throw invalid(key, 'a key must not contain a query or fragment. Routes match the host and path only.')
   if (hostPart.includes(':')) throw invalid(key, 'a key must not contain a port.')
   if (hostPart.includes('*')) throw invalid(key, 'wildcards are not supported. List every host.')
-  try {
-    const url = new URL(`https://${hostPart}`)
-    if (url.host !== url.hostname || url.pathname !== '/' || url.username !== '') throw new Error()
-    return { host: url.hostname, path }
-  } catch {
-    throw invalid(key, `"${hostPart}" is not a valid hostname.`)
-  }
+  const host = parseHostname(hostPart)
+  if (host === undefined) throw invalid(key, `"${hostPart}" is not a valid hostname.`)
+  const path = plainPath(pathPart)
+  if ('error' in path) throw invalid(key, `the key path ${path.error}.`)
+  return { host, path: path.segments }
 }
 
-// A decoded segment must not smuggle a path separator, a dot segment or a control character.
-const UNSAFE_SEGMENT = /[/\\\p{Cc}]/u
+/** Where a route sends requests. A path origin stays on the request host. */
+type ParsedOrigin =
+  | { kind: 'path', segments: string[] }
+  | { kind: 'url', storage: boolean, host: string, port: string, segments: string[] }
 
 /**
- * Splits a request pathname into decoded segments for matching and raw
- * segments for forwarding. Repeated slashes collapse. Returns undefined when
- * a segment cannot be decoded, decodes to a path separator or a dot segment,
- * or contains a control character. Such a request matches no route.
+ * Validates an origin and splits it into its target. Accepts a storage
+ * shorthand, an https:// URL, a bare host with an optional path, or a path.
  */
-export function canonicalPath(pathname: string): CanonicalPath | undefined {
-  const raw = pathname.split('/').filter((segment) => segment !== '')
-  const decoded: string[] = []
-  for (const segment of raw) {
-    let plain: string
-    try {
-      plain = decodeURIComponent(segment)
-    } catch {
-      return undefined
-    }
-    if (UNSAFE_SEGMENT.test(plain) || plain === '.' || plain === '..') return undefined
-    decoded.push(plain)
+export function parseOrigin(key: string, origin: unknown): ParsedOrigin {
+  if (typeof origin !== 'string' || origin === '') throw invalid(key, 'the origin must be a non-empty string.')
+  if (/[?#]/.test(origin)) throw invalid(key, 'the origin must not contain a query or fragment. The request path is appended to it.')
+
+  const provider = providerFor(origin)
+  if (provider) {
+    const parsed = provider.parse(origin)
+    if ('error' in parsed) throw invalid(key, `the ${provider.scheme}:// origin ${parsed.error}. Write ${provider.usage}.`)
+    const url = new URL(parsed.url)
+    const path = canonicalPath(url.pathname)
+    if (!path) throw invalid(key, `the ${provider.scheme}:// origin resolves to an unsafe path.`)
+    return { kind: 'url', storage: true, host: url.hostname, port: url.port, segments: path.decoded }
   }
-  return { decoded, raw, trailingSlash: pathname.endsWith('/') }
+
+  if (origin.startsWith('/')) {
+    const path = plainPath(origin)
+    if ('error' in path) throw invalid(key, `the origin path ${path.error}.`)
+    return { kind: 'path', segments: path.segments }
+  }
+
+  let rest = origin
+  if (origin.includes('://')) {
+    if (!origin.startsWith('https://')) throw invalid(key, 'the origin must be an https:// URL, a storage shorthand such as s3://, a host, or a path.')
+    rest = origin.slice('https://'.length)
+  }
+  const slash = rest.indexOf('/')
+  const authority = slash === -1 ? rest : rest.slice(0, slash)
+  const pathPart = slash === -1 ? '' : rest.slice(slash)
+
+  if (authority.includes('@')) throw invalid(key, 'the origin must not contain credentials.')
+  const portMatch = authority.match(/^(.*?)(?::(\d{1,5}))?$/)
+  const hostPart = portMatch?.[1] ?? authority
+  const port = portMatch?.[2] ?? ''
+  if (port !== '' && (Number(port) < 1 || Number(port) > 65535)) throw invalid(key, `the origin port "${port}" is out of range.`)
+  const host = parseHostname(hostPart)
+  if (host === undefined) throw invalid(key, `the origin host "${hostPart}" is not a valid hostname.`)
+  const path = plainPath(pathPart)
+  if ('error' in path) throw invalid(key, `the origin path ${path.error}.`)
+  return { kind: 'url', storage: false, host, port, segments: path.segments }
 }
 
-const isPrefix = (prefix: string[], path: string[]): boolean =>
-  prefix.length <= path.length && prefix.every((segment, i) => segment === path[i])
+// ---------------------------------------------------------------------------
+// Matching.
+// ---------------------------------------------------------------------------
 
 /**
  * Finds the route for a hostname and pathname. The routes must be in
@@ -121,7 +189,7 @@ export function matchRoute(routes: CompiledRoute[], hostname: string, pathname: 
   for (const route of routes) {
     if (route.host !== hostname || !isPrefix(route.path, path.decoded)) continue
     const rest = path.raw.slice(route.path.length)
-    const remainder = (rest.length === 0 ? '' : `/${rest.join('/')}`) + (path.trailingSlash ? '/' : '')
+    const remainder = (rest.length === 0 ? '' : joinPath(rest)) + (path.trailingSlash ? '/' : '')
     return { route, remainder, path }
   }
   return undefined
@@ -133,58 +201,16 @@ const bySpecificity = (a: CompiledRoute, b: CompiledRoute): number =>
   || b.path.length - a.path.length
   || b.key.length - a.key.length
 
-function validateAuth(key: string, auth: AuthMethods[]): void {
-  if (!Array.isArray(auth)) throw invalid(key, '"auth" must be a list of rules.')
-  for (const rule of auth) {
-    if (rule.type === 'basic') {
-      if (!rule.username || !rule.password) throw invalid(key, 'a basic rule needs a username and a password.')
-    } else if (rule.type === 'ip') {
-      if (!Array.isArray(rule.allow) || rule.allow.length === 0) throw invalid(key, 'an ip rule needs at least one address in "allow".')
-    } else {
-      throw invalid(key, `unknown auth rule type "${(rule as { type: string }).type}".`)
-    }
-  }
-}
+// ---------------------------------------------------------------------------
+// Self-fetch detection.
+// ---------------------------------------------------------------------------
 
-/**
- * Rejects origins that can never be fetched safely.
- */
-function validateOrigin(key: string, origin: string): void {
-  if (typeof origin !== 'string' || origin === '') throw invalid(key, 'the origin must be a non-empty string.')
-  if (/[?#\s]/.test(origin)) throw invalid(key, 'an origin must not contain whitespace, a query or a fragment. The request path is appended to it.')
-  // The URL parser resolves dot segments, encoded or not, before any later check can see them.
-  if (/(^|\/)(\.|%2e){1,2}(\/|$)/i.test(origin)) throw invalid(key, 'an origin must not contain "." or ".." segments, encoded or not.')
-
-  const provider = providerFor(origin)
-  if (provider && !provider.shorthand.test(origin)) throw invalid(key, `a ${provider.scheme}:// origin must have the form ${provider.usage}.`)
-  if (!provider && origin.includes('://') && !origin.startsWith('https://')) throw invalid(key, 'an origin must be an https:// URL, a storage shorthand such as s3://, a host, or a path.')
-  if (origin.startsWith('/')) {
-    parseSegments(origin, key)
-    return
-  }
-
-  let url: URL
-  try {
-    url = new URL(resolveOrigin(origin, new URL('https://unknown.invalid/')))
-  } catch {
-    throw invalid(key, `"${origin}" does not resolve to a valid URL.`)
-  }
-  if (url.username !== '' || url.password !== '') throw invalid(key, 'an origin must not contain credentials.')
-  if (canonicalPath(url.pathname) === undefined) throw invalid(key, 'an origin path must not contain an encoded slash, a dot segment or a control character.')
-}
-
-/**
- * The host and path a route sends requests to.
- */
+/** The host and path a route sends requests to. */
 function targetOf(route: CompiledRoute): { host: string, path: string[] } {
-  if (route.origin.startsWith('/')) {
-    return { host: route.host, path: parseSegments(route.origin, route.key) }
-  }
-  // validateOrigin has rejected every origin whose path fails canonicalization.
-  const url = new URL(resolveOrigin(route.origin, new URL('https://unknown.invalid/')))
-  const path = canonicalPath(url.pathname)
-  if (!path) throw invalid(route.key, 'an origin path must not contain an encoded slash, a dot segment or a control character.')
-  return { host: url.hostname, path: path.decoded }
+  const origin = parseOrigin(route.key, route.origin)
+  return origin.kind === 'path'
+    ? { host: route.host, path: origin.segments }
+    : { host: origin.host, path: origin.segments }
 }
 
 /**
@@ -195,13 +221,12 @@ function targetOf(route: CompiledRoute): { host: string, path: string[] } {
  * for its own path, because the request path is appended to the target.
  */
 function nextRoutes(routes: CompiledRoute[], target: { host: string, path: string[] }): CompiledRoute[] {
-  const pathOf = (segments: string[]): string => `/${segments.join('/')}`
   const next = new Set<CompiledRoute>()
-  const winner = matchRoute(routes, target.host, pathOf(target.path))
+  const winner = matchRoute(routes, target.host, joinPath(target.path))
   if (winner) next.add(winner.route)
   for (const route of routes) {
     if (route.host !== target.host || route.path.length <= target.path.length || !isPrefix(target.path, route.path)) continue
-    if (matchRoute(routes, route.host, pathOf(route.path))?.route === route) next.add(route)
+    if (matchRoute(routes, route.host, joinPath(route.path))?.route === route) next.add(route)
   }
   return [...next]
 }
@@ -231,28 +256,46 @@ function rejectCycles(routes: CompiledRoute[]): void {
   for (const route of routes) visit(route)
 }
 
-/**
- * Parses, resolves, validates and orders the routes. Throws on the first
- * invalid route, so a bad configuration fails at startup instead of on a
- * request. Compile once and reuse the result for every request.
- */
-export function compileRoutes(config: Pick<Config, 'routes' | 'auth' | 'edgeCacheTtl' | 'spa' | 'cors'>): CompiledRoute[] {
-  const compiled: CompiledRoute[] = Object.entries(config.routes).map(([key, value]) => {
-    const route: Route = typeof value === 'string' ? { origin: value } : value
-    const auth = route.auth ?? config.auth ?? []
-    const edgeCacheTtl = route.edgeCacheTtl ?? config.edgeCacheTtl ?? 0
-    const isStorage = providerFor(route.origin) !== undefined
-    const spa = route.spa ?? config.spa ?? isStorage
-    const cors = route.cors ?? config.cors ?? isStorage
+// ---------------------------------------------------------------------------
+// Compilation.
+// ---------------------------------------------------------------------------
 
-    validateOrigin(key, route.origin)
-    validateAuth(key, auth)
-    if (!Number.isInteger(edgeCacheTtl) || edgeCacheTtl < 0) throw invalid(key, '"edgeCacheTtl" must be a whole number of seconds, 0 or more.')
-    if (edgeCacheTtl > 0 && auth.length > 0 && !isStorage) {
+/**
+ * Validates the configuration, resolves every default, and orders the
+ * routes. Throws on the first defect, so a bad configuration fails at
+ * startup instead of on a request. Compile once and reuse the result.
+ */
+export function compileRoutes(config: unknown): CompiledRoute[] {
+  if (!isPlainObject(config)) throw new Error('The configuration must be an object.')
+  rejectUnknownKeys('the configuration', config, CONFIG_KEYS)
+  if (!isPlainObject(config.routes)) throw new Error('"routes" must be an object that maps a key to an origin or a route.')
+
+  const defaults = {
+    auth: checkAuth('the configuration', config.auth),
+    edgeCacheTtl: checkTtl('the configuration', config.edgeCacheTtl),
+    spa: checkFlag('the configuration', 'spa', config.spa),
+    cors: checkFlag('the configuration', 'cors', config.cors),
+  }
+
+  const compiled: CompiledRoute[] = Object.entries(config.routes).map(([key, value]) => {
+    const where = `route "${key}"`
+    if (typeof value !== 'string' && !isPlainObject(value)) throw invalid(key, 'the value must be an origin string or a route object.')
+    const route: Record<string, unknown> = typeof value === 'string' ? { origin: value } : value
+    rejectUnknownKeys(where, route, ROUTE_KEYS)
+
+    const { host, path } = parseRouteKey(key)
+    const origin = parseOrigin(key, route.origin)
+    const auth = checkAuth(where, route.auth) ?? defaults.auth ?? []
+    const edgeCacheTtl = checkTtl(where, route.edgeCacheTtl) ?? defaults.edgeCacheTtl ?? 0
+    const storage = origin.kind === 'url' && origin.storage
+    const spa = checkFlag(where, 'spa', route.spa) ?? defaults.spa ?? storage
+    const cors = checkFlag(where, 'cors', route.cors) ?? defaults.cors ?? storage
+
+    if (edgeCacheTtl > 0 && auth.length > 0 && !storage) {
       throw invalid(key, 'a protected route caches only a storage origin. The edge cache key is the URL, so a cached response from an application origin would be served to every authorized user. Set "edgeCacheTtl: 0" on this route.')
     }
 
-    return { key, ...parseRouteKey(key), origin: route.origin, auth, edgeCacheTtl, spa, cors, stripBasicCredentials: false }
+    return { key, host, path, origin: route.origin as string, auth, edgeCacheTtl, spa, cors, stripBasicCredentials: false }
   })
 
   const seen = new Map<string, string>()

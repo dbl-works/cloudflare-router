@@ -1,5 +1,6 @@
 import { AuthMethods } from '../config'
 import { CompiledRoute } from './compile-routes'
+import { canonicalIp } from './ip'
 
 // RFC 7235: the authentication scheme is case-insensitive.
 const BASIC_CREDENTIALS = /^basic\s+(\S+)\s*$/i
@@ -55,8 +56,9 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 const matchesRule = async (rule: AuthMethods, request: Request): Promise<boolean> => {
   if (rule.type === 'ip') {
     // Cloudflare sets this header on every request it proxies. Without it there is no client to allow.
-    const clientIp = request.headers.get('CF-Connecting-IP')
-    return clientIp !== null && rule.allow.includes(clientIp)
+    // Both sides are canonical, so 2001:DB8::1 and 2001:db8:0:0:0:0:0:1 compare equal.
+    const clientIp = canonicalIp(request.headers.get('CF-Connecting-IP') ?? '')
+    return clientIp !== undefined && rule.allow.includes(clientIp)
   }
 
   const attempt = getCredentialsFromAuthorizationHeader(request.headers.get('Authorization'))

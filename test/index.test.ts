@@ -54,47 +54,44 @@ test('A config with no edgeCacheTtl anywhere does not cache (v2 behavior)', asyn
 // --- Startup validation: a malformed route throws in createRouter, not on a request ---
 
 const invalidRoutes: [string, Config['routes'], RegExp][] = [
-  ['an empty key', { '': 's3://eu-central-1.bucket' }, /empty/],
+  ['an empty key', { '': 's3://eu-central-1.bucket' }, /must not be empty/],
   ['a key with a scheme', { 'https://example.com': 's3://eu-central-1.bucket' }, /scheme/],
   ['a key with a port', { 'example.com:443': 's3://eu-central-1.bucket' }, /port/],
   ['a wildcard key', { '*.example.com': 's3://eu-central-1.bucket' }, /wildcard/i],
+  ['a key with whitespace', { 'exam ple.com': 's3://eu-central-1.bucket' }, /not a valid hostname/],
+  ['a key with a backslash', { 'example.com/foo\\bar': 's3://eu-central-1.bucket' }, /key path contains a backslash/],
+  ['a key with a query', { 'example.com?preview=1': 's3://eu-central-1.bucket' }, /query or fragment/],
+  ['a key with a fragment', { 'example.com#top': 's3://eu-central-1.bucket' }, /query or fragment/],
+  ['a path-only key', { '/app': 's3://eu-central-1.bucket' }, /must name a host/],
+  ['a key with a dot segment', { 'example.com/foo/../app': 's3://eu-central-1.bucket' }, /key path contains a "\." or "\.\." segment/],
+  ['a key with an empty segment', { 'example.com/foo//app': 's3://eu-central-1.bucket' }, /key path contains an empty segment/],
+  ['a percent-encoded key path', { 'example.com/%61pp': 's3://eu-central-1.bucket' }, /key path is percent-encoded/],
   ['two keys that differ by a trailing slash', { 'example.com/admin': 's3://eu-central-1.bucket/a', 'example.com/admin/': 's3://eu-central-1.bucket/b' }, /same route/],
   ['two keys that differ by case', { 'Example.com': 's3://eu-central-1.bucket/a', 'example.com': 's3://eu-central-1.bucket/b' }, /same route/],
   ['an s3 origin without a region', { 'example.com': 's3://bucket/app' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 origin with a space', { 'example.com': 's3://eu-central-1.my bucket/app' }, /whitespace/],
+  ['an s3 origin with a space', { 'example.com': 's3://eu-central-1.my bucket/app' }, /s3:\/\/REGION\.BUCKET/],
+  ['an s3 bucket shorter than 3 characters', { 'example.com': 's3://eu-central-1.a/app' }, /3 to 63/],
+  ['an s3 origin with an encoded dot segment', { 'example.com': 's3://eu-central-1.assets.example/%2e%2e/private' }, /prefix is percent-encoded/],
+  ['an s3 origin with a backslash', { 'example.com': 's3://eu-central-1.bucket/foo\\bar' }, /prefix contains a backslash/],
   ['an http origin', { 'example.com': 'http://origin.example' }, /https:\/\//],
+  ['an origin with credentials', { 'example.com': 'https://user:pass@origin.example' }, /credentials/],
+  ['an origin with a query', { 'example.com': 'https://origin.example/base?tenant=1' }, /query or fragment/],
+  ['an origin with a fragment', { 'example.com': 's3://eu-central-1.bucket/app#x' }, /query or fragment/],
+  ['an https origin with an encoded dot segment', { 'example.com': 'https://origin.example/%2e%2e/x' }, /origin path is percent-encoded/],
+  ['a path origin with a backslash', { 'example.com/app': '/foo\\../app' }, /origin path contains a backslash/],
+  ['a path origin with a dot segment that normalizes back onto the key', { 'example.com/app': '/foo/../app' }, /origin path contains a "\." or "\.\." segment/],
   ['an origin equal to the route host', { 'example.com': 'example.com' }, /fetches itself/],
   ['an https origin on the route host', { 'example.com': 'https://example.com/other' }, /fetches itself/],
   ['a path origin on a host-only key', { 'example.com': '/index.html' }, /fetches itself/],
   ['a path origin under the key path', { 'example.com/old': '/old/v2' }, /fetches itself/],
-  ['a path-only key', { '/app': 's3://eu-central-1.bucket' }, /must name a host/],
-  ['a key with a dot segment', { 'example.com/foo/../app': 's3://eu-central-1.bucket' }, /"\." or "\.\."/],
-  ['a key with an empty segment', { 'example.com/foo//app': 's3://eu-central-1.bucket' }, /empty segments/],
-  ['a path origin with a dot segment that normalizes back onto the key', { 'example.com/app': '/foo/../app' }, /"\." or "\.\."/],
-  ['an s3 origin whose bucket is dots', { 'example.com': 's3://eu-central-1.../private' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 origin with a dot segment in the prefix', { 'example.com': 's3://eu-central-1.bucket/../other' }, /encoded or not/],
-  ['an s3 origin with an empty prefix segment', { 'example.com': 's3://eu-central-1.bucket//other' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 origin with an encoded dot segment', { 'example.com': 's3://eu-central-1.assets.example/%2e%2e/private' }, /encoded or not/],
-  ['an s3 origin with any percent-encoding in the prefix', { 'example.com': 's3://eu-central-1.bucket/my%20app' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 bucket label with a leading hyphen', { 'example.com': 's3://eu-central-1.-bucket' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 bucket label with a trailing hyphen', { 'example.com': 's3://eu-central-1.bucket-/app' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 region with a leading hyphen', { 'example.com': 's3://-1.bucket' }, /s3:\/\/REGION\.BUCKET/],
-  ['an https origin with an encoded dot segment', { 'example.com': 'https://origin.example/%2e%2e/x' }, /"\." or "\.\." segments, encoded or not/],
-  ['an https origin with a mixed-case encoded dot segment', { 'example.com': 'https://origin.example/%2E./x' }, /encoded or not/],
-  ['an https origin with an encoded slash', { 'example.com': 'https://origin.example/a%2Fb' }, /encoded slash/],
-  ['a basic rule without a password', { 'example.com': { origin: 's3://eu-central-1.bucket', auth: [{ type: 'basic', username: 'u', password: '' }] } }, /username and a password/],
+  ['a two-host cycle', { 'a.example.com': 'https://b.example.com', 'b.example.com': 'https://a.example.com' }, /leads back to this route through "b.example.com"/],
+  ['a cycle through a path route', { 'a.example.com': 'https://b.example.com/', 'b.example.com/legacy': 'https://a.example.com' }, /fetches itself/],
+  ['a basic rule without a password', { 'example.com': { origin: 's3://eu-central-1.bucket', auth: [{ type: 'basic', username: 'u', password: '' }] } }, /username and password/],
   ['an ip rule without addresses', { 'example.com': { origin: 's3://eu-central-1.bucket', auth: [{ type: 'ip', allow: [] }] } }, /at least one address/],
   ['a negative edgeCacheTtl', { 'example.com': { origin: 's3://eu-central-1.bucket', edgeCacheTtl: -1 } }, /whole number/],
   ['a protected application origin with a cache', { 'example.com': { origin: 'https://backend.example', auth: [{ type: 'ip', allow: ['1.1.1.1'] }], edgeCacheTtl: 60 } }, /caches only a storage origin/],
-  ['a two-host cycle', { 'a.example.com': 'https://b.example.com', 'b.example.com': 'https://a.example.com' }, /leads back to this route through "b.example.com"/],
-  ['a cycle through a path route', { 'a.example.com': 'https://b.example.com/', 'b.example.com/legacy': 'https://a.example.com' }, /fetches itself/],
-  ['a key with a query', { 'example.com?preview=1': 's3://eu-central-1.bucket' }, /query or fragment/],
-  ['a key with a fragment', { 'example.com#top': 's3://eu-central-1.bucket' }, /query or fragment/],
-  ['an origin with credentials', { 'example.com': 'https://user:pass@origin.example' }, /credentials/],
-  ['an origin with a query', { 'example.com': 'https://origin.example/base?tenant=1' }, /a query or a fragment/],
-  ['an origin with a fragment', { 'example.com': 's3://eu-central-1.bucket/app#x' }, /a query or a fragment/],
-  ['an s3 origin with a slash in the region', { 'example.com': 's3://eu-central-1/foo.bucket' }, /s3:\/\/REGION\.BUCKET/],
-  ['an s3 origin with uppercase', { 'example.com': 's3://eu-central-1.MyBucket' }, /s3:\/\/REGION\.BUCKET/],
+  // @ts-expect-error intentionally passing a string
+  ['a string cors value on a route', { 'example.com': { origin: 'https://origin.example', cors: 'false' } }, /"cors" in route "example.com" must be true or false/],
 ]
 
 for (const [name, routes, message] of invalidRoutes) {
@@ -113,6 +110,17 @@ test('createRouter accepts every documented key and origin form', () => {
       'Sovereign.example.com': 's3://eusc-de-east-1.bucket',
     },
   })).not.toThrow()
+})
+
+test('createRouter rejects a string cors or spa value at the top level', () => {
+  // @ts-expect-error intentionally passing a string
+  expect(() => createRouter({ cors: 'false', routes: { 'example.com': 's3://eu-central-1.bucket' } })).toThrow(/"cors" in the configuration must be true or false/)
+  // @ts-expect-error intentionally passing a string
+  expect(() => createRouter({ spa: 1, routes: { 'example.com': 's3://eu-central-1.bucket' } })).toThrow(/"spa" in the configuration must be true or false/)
+})
+
+test('createRouter accepts a bucket of exactly 3 and 63 characters', () => {
+  expect(() => createRouter({ routes: { 'a.example.com': 's3://eu-central-1.abc/app', 'b.example.com': `s3://eu-central-1.${'a'.repeat(63)}` } })).not.toThrow()
 })
 
 test('createRouter rejects a protected application origin with a top-level cache', () => {
