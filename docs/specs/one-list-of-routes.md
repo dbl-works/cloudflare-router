@@ -1,8 +1,12 @@
 # Spec: one list of routes
 
-* Status: proposed
+* Status: implemented on branch `lud/cleanup-design`, updated after review
 * Target version: 3.0.0
 * Date: 2026-09-06
+
+Review rounds widened the scope. The sections below describe the shipped
+design. The follow-up ideas that the reviews raised but did not ship live in
+`routing-hardening-backlog.md`.
 
 ## Summary
 
@@ -93,21 +97,33 @@ register the worker. They are not router input.
 
 ## Non-goals
 
-* No change to origin resolution in `normalizeRequest`.
 * No change to the cache headers that `handleRequest` sends.
-* No change to the basic auth or IP auth algorithms.
+* No change to the basic auth or IP auth algorithms. The header parsing and
+  the header stripping did change, see "Authentication".
 * No compatibility mode for the 2.x configuration shape.
 * No deploy automation. This library does not call the Cloudflare API.
+* No CIDR support in IP rules.
+
+An early draft also excluded origin resolution. Review found that
+`normalizeRequest` rewrote a serialized URL with string replacement, and that
+every route matching defect came from that. The shipped design parses the URL
+once. See "Route matching".
 
 ## Proposed design
 
 ### Principle
 
-Make the bad state unrepresentable. Do not validate against it.
+Make the bad state unrepresentable. Validate only what a type cannot express.
 
 A route is the unit of configuration. A route owns its origin, its
-authentication, and its cache lifetime. No second list exists, so no second
-list can disagree.
+authentication, its cache lifetime, and its SPA behavior. No second list
+exists, so no second list can disagree.
+
+A route key and an origin are strings. A type cannot reject a key with a port
+or an origin that points back at the worker. `createRouter` validates those
+at startup and throws. The message names the key and the fix. The rule from
+the `deployments` removal applies: a defect fails in `wrangler dev`, not on
+the first production request.
 
 ### The configuration
 
@@ -136,10 +152,54 @@ takes every default. An object overrides a default for that route.
 
 ### One resolution rule
 
-`auth` and `edgeCacheTtl` resolve the same way. A route that sets the key uses
-its own value. Every other route uses the top-level value.
+`auth`, `edgeCacheTtl` and `spa` resolve the same way. A route that sets the
+key uses its own value. Every other route uses the top-level value. Without
+either, the key takes its default.
 
-One rule covers both keys, so a reader learns it once.
+| Key            | Default                                        |
+| -------------- | ---------------------------------------------- |
+| `auth`         | Public                                         |
+| `edgeCacheTtl` | `0`, no edge cache. This matches 2.x.          |
+| `spa`          | `true` for a storage origin such as `s3://`    |
+
+One rule covers three keys, so a reader learns it once.
+
+### Route matching
+
+A key has three forms: `host`, `host/path`, and `/path`. The router parses the
+request URL once and compares the canonical hostname and the pathname:
+
+* A host part must equal the hostname. Case and port do not matter.
+* A path part matches on a segment boundary. `/admin` matches `/admin` and
+  `/admin/x`, not `/admin-panel`.
+* A trailing slash on a key or an origin has no meaning.
+* The most specific key wins: host and path, then host, then path. Among
+  equals, the longer path wins.
+
+The router builds the target URL from the resolved origin and the rest of the
+request path. On an SPA route a navigation resolves to `index.html`. An asset
+keeps its path and query. The request port never reaches the origin.
+
+Storage shorthands live behind a small provider interface in
+`src/utils/providers/`. S3 is the only provider. A new provider is one module
+and one list entry.
+
+### Startup validation
+
+`createRouter` compiles the routes once and rejects:
+
+* An empty key, or a key with a scheme, port, wildcard, query, fragment, or
+  whitespace.
+* Two keys that resolve to one route, such as `example.com/admin` and
+  `example.com/admin/`.
+* An origin that is not `https://`, a storage shorthand, a host, or a path.
+* An origin with credentials, a query, or a fragment.
+* A storage shorthand that does not match its provider grammar.
+* A chain of routes that leads back to its start, so the worker would fetch
+  itself. The check knows the hosts named in the keys. A host that no key
+  names counts as external.
+
+The `isS3Site` key throws like `deployments` does. The message names `spa`.
 
 ### Authentication
 
@@ -165,6 +225,14 @@ export default createRouter({
 
 Two concepts cover every case. A default for the worker, and an override for
 one route.
+
+The Basic scheme is matched case-insensitively, as RFC 7235 requires. When
+the effective rules of a route contain a `basic` rule, the router removes the
+`Authorization` header before it contacts the origin. Otherwise the header
+stays, so a public or IP-only route can proxy to an origin with its own Basic
+authentication. Credentials are compared after Unicode normalization on both
+sides. An IP rule needs the `CF-Connecting-IP` header. Without it, the rule
+never matches.
 
 ### Edge cache
 
@@ -200,9 +268,15 @@ A route may set `edgeCacheTtl: 0` to disable the edge cache for that host
 alone. The router therefore resolves the value with `??`, not with `&&`. A
 value of `0` is a deliberate choice, not an absent key.
 
-The current code reads `cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0`
+The 2.x code reads `cache && config.edgeCacheTtl ? config.edgeCacheTtl : 0`
 in `src/cloudflare-router.ts`. That expression cannot express a per-route
 zero, because it treats `0` as absent.
+
+Without any `edgeCacheTtl` the router does not cache. That is the 2.x
+behavior. The 2.x `DEFAULT_CONFIG` export advertised 86400 seconds but was
+never applied, so 3.0.0 removes the export. A cache that is on by default
+would store a per-user response from a dynamic origin behind IP auth and
+serve it to the next user.
 
 ### An unknown host returns 404
 
@@ -323,13 +397,19 @@ this release is to remove the second list.
 
 ## Semantic versioning
 
-This is a major release. Three behaviors change:
+This is a major release. These behaviors change:
 
 * `deployments` is removed. `createRouter` throws when it is present.
+* `isS3Site` is replaced by `spa`. `createRouter` throws when it is present.
+* `DEFAULT_CONFIG` is no longer exported.
 * An unknown host returns 404. Before, with an empty `deployments` list, the
   router fetched the original URL.
 * An `OPTIONS` request to an unknown host returns 404. Before it passed
   through.
+* `createRouter` validates the routes and throws on a defect. Before, a
+  defect surfaced as a silent 404 or an error on the first request.
+* Route matching is exact on the hostname and on path segment boundaries.
+  Before, a substring match on the serialized URL decided.
 
 ### Migration
 
@@ -339,7 +419,9 @@ This is a major release. Three behaviors change:
    it covered. Change the route value from a string to an object.
 4. If one rule covered every host, set the top-level `auth` instead.
 5. Move `accountId` and `zoneId` to the deploy tool, or delete them.
-6. Run `wrangler dev`. A leftover `deployments` key throws and names the fix.
+6. Replace `isS3Site: false` with `spa: true`, or set `spa` per route.
+7. Run `wrangler dev`. A leftover `deployments` or `isS3Site` key throws and
+   names the fix. So does a malformed route.
 
 ## Test plan
 
@@ -368,12 +450,19 @@ Add cases to `test/utils/handle-request.test.ts`:
 * A route without `edgeCacheTtl` uses the top-level value.
 * A route with `edgeCacheTtl` overrides the top-level value.
 * A route with `edgeCacheTtl: 0` disables the cache under a non-zero default.
-* A config with no `edgeCacheTtl` anywhere uses the documented default.
+* A config with no `edgeCacheTtl` anywhere does not cache.
 
 Update `test/index.test.ts`:
 
 * `createRouter` accepts a config with routes only.
 * `createRouter` throws on a `deployments` key, and the message names `auth`.
+* `createRouter` throws on an `isS3Site` key, and the message names `spa`.
+* `createRouter` throws on each invalid key and origin form listed under
+  "Startup validation", and accepts every documented form.
+* `createRouter` compiles the routes once.
+
+The shipped test files add cases for every review finding. Each asserts the
+resulting URL, not only that a route matched.
 
 Delete `test/utils/deployment-for-request.test.ts`.
 
@@ -392,10 +481,19 @@ Delete `test/utils/deployment-for-request.test.ts`.
 5. Throw in `createRouter` on a `deployments` key.
 6. Update `index.ts`, `README.md`, and `CHANGELOG.md`. Describe the 404 cause
    that this release removes. Document the per-route cache lifetime.
+7. Review round. Replace string replacement in `normalizeRequest` with URL
+   parsing. Split origin resolution into `resolve-origin.ts` and a provider
+   module per storage service. Add `compile-routes.ts` with key parsing,
+   specificity ordering, validation, and cycle detection. Replace `isS3Site`
+   with `spa`. Restore the 2.x cache default. Update the docs.
 
 ## Resolved questions
 
-Earlier drafts proposed a validator, a strict mode, and a helper that derived
-`deployments` from `routes`. This design drops all three. A validator guards a
-state that this shape cannot reach. A strict mode keeps two sources of truth.
-A helper generates a list that no longer exists.
+Earlier drafts proposed a validator for the two-list state, a strict mode, and
+a helper that derived `deployments` from `routes`. This design drops all
+three. That validator guards a state that this shape cannot reach. A strict
+mode keeps two sources of truth. A helper generates a list that no longer
+exists.
+
+The shipped validator is a different thing. It checks the string grammar of
+keys and origins, which no type can express. See "Startup validation".

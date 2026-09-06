@@ -15,11 +15,11 @@ export const createRouter = (config: Config) => {
   }
 
   // Fail at startup, not on the first request, when a route is malformed.
-  compileRoutes(config.routes)
+  const routes = compileRoutes(config.routes)
 
   return {
     async fetch(request: Request, _env: Record<string, unknown>, _ctx: ExecutionContext): Promise<Response> {
-      const { request: normalizedReq, route } = normalizeRequest(request, config.routes, config.spa)
+      const { request: normalizedReq, route } = normalizeRequest(request, routes, config.spa)
       return authorize(normalizedReq, route, config.auth, async (authReq) => {
         // No cache unless the config asks for one. A route value wins over the config value.
         const edgeCacheTtl = route?.edgeCacheTtl ?? config.edgeCacheTtl ?? 0

@@ -91,8 +91,11 @@ An origin has one of four forms:
 - An empty key, a key with a scheme, a port, a wildcard, or whitespace.
 - Two keys that resolve to one route, such as `example.com/admin` and `example.com/admin/`.
 - An origin that is not `https://`, an `s3://` shorthand, a host, or a path.
-- An `s3://` origin without a region, or one that does not form a valid URL.
-- An origin that points at the route host, because the worker would fetch itself.
+- An origin with credentials, a query, or a fragment.
+- An `s3://` origin that does not have the form `s3://REGION.BUCKET` or `s3://REGION.BUCKET/PREFIX`.
+- A chain of routes that leads back to its start, because the worker would fetch itself.
+
+The self-fetch check knows the hosts named in the keys. A host that no key names counts as external. A path-only key that sends requests to a host the worker also serves, but that no key names, is not detected.
 
 ## Basic Authentication & IP Restrictions
 

@@ -1,5 +1,10 @@
 import { test, expect } from 'vitest'
-import normalizeRequest from '../../src/utils/normalize-request'
+import normalize from '../../src/utils/normalize-request'
+import { compileRoutes } from '../../src/utils/compile-routes'
+import { Routes } from '../../src/config'
+
+const normalizeRequest = (request: Request, routes: Routes, spa?: boolean) =>
+  normalize(request, compileRoutes(routes), spa)
 
 const TEST_ROUTES = {
   'admin.example.com': 'https://s3.eu-central-1.amazonaws.com/assets.example.com/admin',

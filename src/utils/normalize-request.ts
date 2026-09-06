@@ -1,5 +1,5 @@
-import { Routes, Route } from '../config'
-import { compileRoutes } from './compile-routes'
+import { Route } from '../config'
+import { CompiledRoute, matchRoute } from './compile-routes'
 import { resolveOrigin } from './resolve-origin'
 import { providerFor } from './providers'
 
@@ -21,43 +21,26 @@ const isMediaFile = (pathname: string): boolean => {
 }
 
 /**
- * Returns the rest of `pathname` after `prefix`, or undefined when `prefix`
- * does not match on a segment boundary. '/admin' matches '/admin' and
- * '/admin/x', but not '/admin-panel'.
- */
-function matchPath(pathname: string, prefix: string): string | undefined {
-  if (prefix === '') return pathname
-  if (pathname === prefix) return ''
-  if (pathname.startsWith(prefix + '/')) return pathname.slice(prefix.length)
-  return undefined
-}
-
-/**
- * Resolves a request against the routes and returns the origin-bound request
- * together with the matched route. The most specific key wins. When no key
+ * Resolves a request against the compiled routes and returns the
+ * origin-bound request together with the matched route. When no route
  * matches, the request is returned unchanged and the route is undefined.
  *
  * `spa` is the config default. A route value wins over it. Without either,
  * a route is an SPA when its origin is a storage shorthand such as s3://.
  */
-export default function normalizeRequest(request: Request, routes: Routes, spa?: boolean): { request: Request, route: Route | undefined } {
+export default function normalizeRequest(request: Request, routes: CompiledRoute[], spa?: boolean): { request: Request, route: Route | undefined } {
   const url = new URL(request.url)
-  for (const { host, path, route } of compileRoutes(routes)) {
-    if (host !== undefined && host !== url.hostname) continue
+  const match = matchRoute(routes, url.hostname, url.pathname)
+  if (!match) return { request, route: undefined }
 
-    const remainder = matchPath(url.pathname, path)
-    if (remainder === undefined) continue
+  const { route } = match.route
+  const base = resolveOrigin(route.origin, url)
+  const singlePageApp = route.spa ?? spa ?? providerFor(route.origin) !== undefined
 
-    const base = resolveOrigin(route.origin, url)
-    const singlePageApp = route.spa ?? spa ?? providerFor(route.origin) !== undefined
+  // An SPA serves index.html for every navigation. Assets keep their path and query.
+  const target = singlePageApp && !isMediaFile(url.pathname)
+    ? `${base}/index.html`
+    : `${base}${match.remainder}${url.search}`
 
-    // An SPA serves index.html for every navigation. Assets keep their path and query.
-    const target = singlePageApp && !isMediaFile(url.pathname)
-      ? `${base}/index.html`
-      : `${base}${remainder}${url.search}`
-
-    return { request: new Request(target, request), route }
-  }
-
-  return { request, route: undefined }
+  return { request: new Request(target, request), route }
 }

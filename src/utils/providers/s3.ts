@@ -1,6 +1,8 @@
 import type { StorageProvider } from './index'
 
-const SHORTHAND = /^s3:\/\/([^.]+)\.([^/]+)(\/?.*)$/
+// REGION.BUCKET, then an optional prefix. Regions and buckets are lowercase letters, digits and hyphens;
+// a bucket may also contain dots.
+const SHORTHAND = /^s3:\/\/([a-z0-9-]+)\.([a-z0-9.-]+)(\/[^?#\s]*)?$/
 
 /**
  * Resolves the AWS domain suffix based on the S3 region.
@@ -27,7 +29,7 @@ function resolveS3Url(shorthand: string): string {
   const match = shorthand.match(SHORTHAND)
   if (!match) return shorthand
 
-  const [, region, bucket, pathSuffix] = match
+  const [, region, bucket, pathSuffix = ''] = match
   const domain = resolveS3Domain(region)
 
   if (bucket.includes('.')) {
