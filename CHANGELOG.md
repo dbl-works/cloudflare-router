@@ -6,34 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [3.0.0] - 2026-09-06
+
+One list of routes. Each route owns its origin, its auth, its cache lifetime and its SPA behavior. See `docs/migration-guide-v2-to-v3.md`.
+
+### Removed
+- **BREAKING**: `deployments`, `accountId` and `zoneId`. Put `auth` on a route or at the top level.
+- **BREAKING**: `isS3Site`. Use `spa` per route or at the top level.
+- **BREAKING**: `DEFAULT_CONFIG`. It advertised a cache TTL that was never applied.
+- **BREAKING**: Path-only route keys such as `'/old-path'`. Every key names a host: `'example.com/old-path'`.
+
 ### Changed
-- **BREAKING**: Removed the `deployments` configuration array. Route matching, authentication, and cache rules are now driven entirely by the `routes` object. `createRouter` will throw an error if a `deployments` key is present.
-- **BREAKING**: An unknown host request (one that doesn't match any `routes` entry) now immediately returns a `404 Not Found` with the body `Unknown host`. Previously, if `deployments` was empty, the router would attempt to fetch the original URL, which could cause a worker to self-fetch infinitely.
-- **BREAKING**: `OPTIONS` requests to unknown hosts now return `404 Not Found`. Previously, they bypassed the deployment matching and were passed through to the upstream origin regardless of the host.
-- **BREAKING**: Only a CORS preflight on a route with `cors: true` skips authentication. A preflight has an `Origin` header, an `Access-Control-Request-Method` header, and no body. `cors` resolves like `spa` and defaults to `true` for a storage origin such as `s3://` and `false` for any other origin. Every other `OPTIONS` request is authenticated like a `GET`. Before, every `OPTIONS` request skipped authentication.
-- **BREAKING**: A failed request on a route without a `basic` rule returns `403 Forbidden` without a `WWW-Authenticate` header. Before, every failure returned `401` with a Basic challenge, which made browsers collect credentials for IP-only routes.
-- **BREAKING**: A route key must name a host. A key that starts with `/` throws at startup, and the message names the fix. The hosts the worker serves are now exactly the hosts the keys name, so the self-fetch check at startup is complete.
-- Auth rules can now be defined per-route or globally in `Config`.
-- Route matching now parses the request URL instead of replacing substrings. A host key must equal the request hostname. A path key matches on a segment boundary. The most specific key wins: host and path, then host. Among equal keys, the longer path wins. Trailing slashes on keys and origins have no meaning. The request port never reaches the origin, and a query string never changes the asset detection.
-- Request paths are canonicalized before matching. The router percent-decodes each segment and collapses repeated slashes. A segment that fails to decode, that decodes to `.`, `..`, `/`, or `\`, or that holds a control character, matches no route and returns 404. This closes a bypass where an encoded path reached a route that the raw path would have missed.
-- **BREAKING**: `createRouter` validates every route at startup and throws on a malformed key, a duplicate key, a malformed origin, or a chain of routes that leads back to its start. Keys and origins must not contain a query, fragment, or credentials. In v2 these defects surfaced as a 404 or a runtime error on the first request.
-- `createRouter` also rejects a `basic` rule without a username and password, an `ip` rule without an address in `allow`, an `edgeCacheTtl` that is not a whole number of seconds, and an origin with whitespace.
-- The `s3://` shorthand grammar is tighter. A label holds lowercase letters, digits, and hyphens, and does not start or end with a hyphen. A region is one label. A bucket is labels joined by single dots. A prefix must not contain an empty segment or any percent-encoding, so URL normalization cannot move it out of the bucket path.
-- Every origin rejects a `.` or `..` segment, encoded or not, a backslash, and an encoded slash or control character in its path. Keys reject a backslash too. A complete S3 bucket name must be 3 to 63 characters.
-- `createRouter` rejects a `spa` or `cors` value that is not a boolean, so a truthy string cannot open a bypass for JavaScript consumers.
-- **BREAKING**: `createRouter` rejects an unknown key on the config, a route, or an auth rule. A typo such as `edgeCacheTTL` now throws instead of being ignored.
-- **BREAKING**: Each `ip` rule entry must be one IPv4 or IPv6 address. A CIDR range or a hostname throws at startup. In v2 such an entry silently never matched. Addresses compare in canonical form, so IPv6 spelling differences no longer cause a mismatch.
-- Configuration objects must have a normal or null prototype, and only own data fields count, enumerable or not. A getter or a symbol key throws. An inherited field, a `Map` or a class instance throws. A sparse `auth` or `allow` list throws. A route key host must be a DNS name or an IPv4 literal, so `foo_bar` or `123` throws. The S3 provider also rejects the reserved `.mrap` suffix.
-- Validation now rests on three invariants instead of case-by-case checks: one path canonicalizer for request and configured paths, runtime validation of every config value, and complete parsing of each storage shorthand. The S3 provider applies the full AWS bucket naming rules. The invariants are covered by property-based tests.
-- **BREAKING**: `createRouter` throws when a route has non-empty effective `auth` and a positive `edgeCacheTtl` on an origin that is not a storage origin such as `s3://`. The edge cache key is the URL only, so a cached response would serve one user's data to every authorized user. Set `edgeCacheTtl: 0` on such a route.
-- **BREAKING**: The `isS3Site` flag is replaced by `spa`, which is available per route and at the top level. `createRouter` throws when `isS3Site` is present. A route with a storage origin such as `s3://` is an SPA by default. Any other origin is a plain proxy by default. `isS3Site: false` becomes `spa: true`.
-- **BREAKING**: `DEFAULT_CONFIG` is no longer exported. It advertised an `edgeCacheTtl` of 86400 that the router never applied. Without `edgeCacheTtl` the router does not cache, as in v2.
-- **BREAKING**: Basic credential stripping is now per host. When any route on a host uses a `basic` rule, the router removes the `Authorization: Basic ...` header from every route on that host, including a public sibling route. Before, stripping followed the effective rules of the route alone. The Basic scheme is matched case-insensitively.
-- An `ip` rule now rejects a request without a `CF-Connecting-IP` header. Before, such a request matched an `allow` entry of `0.0.0.0/0`.
-- Basic auth compares credentials after Unicode normalization on both sides, so a rule stored in NFD matches a client that sends NFC.
+- **BREAKING**: A request to a host that no route names returns `404 Unknown host`, for every method.
+- **BREAKING**: `createRouter` validates the whole configuration at startup and throws with a message that names the key and the fix. Unknown keys, malformed keys or origins, invalid auth rules, CIDR ranges in `ip` rules, and routes that would make the worker fetch itself all throw.
+- **BREAKING**: `OPTIONS` requests are authenticated like any other request. Only a CORS preflight on a route with `cors: true` passes without credentials. `cors` defaults to `true` for `s3://` origins.
+- **BREAKING**: A protected route with a positive `edgeCacheTtl` must have an `s3://` origin.
+- **BREAKING**: A failed request on a route without a `basic` rule returns `403` instead of a `401` Basic challenge.
+- A route value may be a string or an object. `auth`, `edgeCacheTtl`, `spa` and `cors` resolve the same way: route value, then top-level value, then default.
+- Route matching is exact on the hostname and on path segment boundaries. The most specific key wins. Encoded paths are matched after decoding, so an encoded path cannot reach a different route than its plain form.
+- Basic credentials are removed before the origin fetch on every route of a host that uses Basic auth. On other hosts the `Authorization` header is forwarded.
 
 ### Added
-- Added per-route `edgeCacheTtl` support, allowing you to configure different cache lifetimes for different hosts.
+- Per-route `edgeCacheTtl`, `auth`, `spa` and `cors`.
 
 ## [2.0.0] - 2026-05-03
 ### Changed
