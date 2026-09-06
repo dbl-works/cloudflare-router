@@ -9,26 +9,24 @@ export type IPAuthMethod = {
   allow: string[]
 }
 
-type AuthMethods = BasicAuthMethod | IPAuthMethod
+export type AuthMethods = BasicAuthMethod | IPAuthMethod
 
-export type Routes = Record<string, string>
-
-export interface Deployment {
-  accountId: string
-  zoneId: string
-  routes: string[]
+export interface Route {
+  origin: string
   auth?: AuthMethods[]
+  edgeCacheTtl?: number
 }
 
+export type Routes = Record<string, string | Route>
+
 export interface Config {
-  deployments?: Deployment[]
   routes: Routes
+  auth?: AuthMethods[]
   isS3Site?: boolean
   edgeCacheTtl?: number
 }
 
 export const DEFAULT_CONFIG: Config = {
-  deployments: [],
   routes: {},
   edgeCacheTtl: 86400,
 }

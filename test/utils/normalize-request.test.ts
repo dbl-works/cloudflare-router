@@ -8,112 +8,119 @@ const TEST_ROUTES = {
   'fonts.example.com': 's3://us-east-1.fonts.example.com',
   'cdn.example.com': 's3://eu-central-1.bucket-name/public',
   '/old-path': '/new-path',
+  'object.example.com': { origin: 's3://eu-central-1.bucket-name/object', edgeCacheTtl: 123 },
 }
 
 test('returns the original input if no matching routes', () => {
-  const { request, cache } = normalizeRequest(new Request('https://example.com/'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://example.com/'), TEST_ROUTES)
   expect(request.url).toEqual('https://example.com/')
-  expect(cache).toEqual(false)
+  expect(route).toBeUndefined()
 })
 
 test('maps root js file to s3 bucket subpath', () => {
-  const { request, cache } = normalizeRequest(new Request('https://admin.example.com/some/file.js'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://admin.example.com/some/file.js'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/admin/some/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toEqual({ origin: TEST_ROUTES['admin.example.com'] })
 })
 
 test('maps root path to s3 bucket subpath', () => {
-  const { request, cache } = normalizeRequest(new Request('https://admin.example.com/'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://admin.example.com/'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/admin/')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps subpath js file to s3 bucket subpath', () => {
-  const { request, cache } = normalizeRequest(new Request('https://example.com/admin/some/file.js'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://example.com/admin/some/file.js'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/admin/some/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps js to s3 bucket root (virtual-hosted style for dot-free bucket)', () => {
-  const { request, cache } = normalizeRequest(new Request('https://cdn.example.com/some/file.js'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://cdn.example.com/some/file.js'), TEST_ROUTES)
   expect(request.url).toEqual('https://bucket-name.s3.eu-central-1.amazonaws.com/public/some/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps SPA root path to s3 bucket index (path-style for dotted bucket)', () => {
-  const { request, cache } = normalizeRequest(new Request('https://dashboard.example.com/'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://dashboard.example.com/'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/dashboard/index.html')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps SPA sub path to s3 bucket index', () => {
-  const { request, cache } = normalizeRequest(new Request('https://dashboard.example.com/users/'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://dashboard.example.com/users/'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/dashboard/index.html')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps SPA JS FILE to s3 bucket location', () => {
-  const { request, cache } = normalizeRequest(new Request('https://dashboard.example.com/some/file.js'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://dashboard.example.com/some/file.js'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.eu-central-1.amazonaws.com/assets.example.com/dashboard/some/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps SPA root to s3 bucket root without subpath (path-style for dotted bucket)', () => {
-  const { request, cache } = normalizeRequest(new Request('https://fonts.example.com/'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://fonts.example.com/'), TEST_ROUTES)
   expect(request.url).toEqual('https://s3.us-east-1.amazonaws.com/fonts.example.com/index.html')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('forwards original request when domain is not exact match', () => {
-  const { request, cache } = normalizeRequest(new Request('https://api.fonts.example.com/test/'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://api.fonts.example.com/test/'), TEST_ROUTES)
   expect(request.url).toEqual('https://api.fonts.example.com/test/')
-  expect(cache).toEqual(false)
+  expect(route).toBeUndefined()
 })
 
 test('simple path replace', () => {
-  const { request, cache } = normalizeRequest(new Request('https://example.com/old-path'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://example.com/old-path'), TEST_ROUTES)
   expect(request.url).toEqual('https://example.com/new-path')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps pdf to s3 bucket location (virtual-hosted style for dot-free bucket)', () => {
-  const { request, cache } = normalizeRequest(new Request('https://cdn.example.com/some/file.pdf'), TEST_ROUTES)
+  const { request, route } = normalizeRequest(new Request('https://cdn.example.com/some/file.pdf'), TEST_ROUTES)
   expect(request.url).toEqual('https://bucket-name.s3.eu-central-1.amazonaws.com/public/some/file.pdf')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
+})
+
+test('maps object route value origin', () => {
+  const { request, route } = normalizeRequest(new Request('https://object.example.com/some/file.pdf'), TEST_ROUTES)
+  expect(request.url).toEqual('https://bucket-name.s3.eu-central-1.amazonaws.com/object/some/file.pdf')
+  expect(route).toEqual({ origin: 's3://eu-central-1.bucket-name/object', edgeCacheTtl: 123 })
 })
 
 // --- EU Sovereign Cloud ---
 
 test('maps to amazonaws.eu for EU Sovereign Cloud region (eusc-*)', () => {
   const routes = { 'sovereign.example.com': 's3://eusc-de-east-1.my-bucket/assets' }
-  const { request, cache } = normalizeRequest(new Request('https://sovereign.example.com/file.js'), routes)
+  const { request, route } = normalizeRequest(new Request('https://sovereign.example.com/file.js'), routes)
   expect(request.url).toEqual('https://my-bucket.s3.eusc-de-east-1.amazonaws.eu/assets/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 test('maps SPA to amazonaws.eu for EU Sovereign Cloud region', () => {
   const routes = { 'sovereign.example.com': 's3://eusc-de-east-1.my-app' }
-  const { request, cache } = normalizeRequest(new Request('https://sovereign.example.com/dashboard'), routes)
+  const { request, route } = normalizeRequest(new Request('https://sovereign.example.com/dashboard'), routes)
   expect(request.url).toEqual('https://my-app.s3.eusc-de-east-1.amazonaws.eu/index.html')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 // --- Guard: bucket named "eusc-*" in standard AWS must NOT trigger .amazonaws.eu ---
 
 test('does NOT use amazonaws.eu when bucket name starts with eusc but region is standard', () => {
   const routes = { 'edge.example.com': 's3://eu-central-1.eusc-named-bucket/public' }
-  const { request, cache } = normalizeRequest(new Request('https://edge.example.com/file.js'), routes)
+  const { request, route } = normalizeRequest(new Request('https://edge.example.com/file.js'), routes)
   expect(request.url).toEqual('https://eusc-named-bucket.s3.eu-central-1.amazonaws.com/public/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 // --- Account Regional namespace buckets ---
 
 test('works with Account Regional namespace bucket names', () => {
   const routes = { 'app.example.com': 's3://eu-central-1.my-app-123456789012-eu-central-1-an/assets' }
-  const { request, cache } = normalizeRequest(new Request('https://app.example.com/file.js'), routes)
+  const { request, route } = normalizeRequest(new Request('https://app.example.com/file.js'), routes)
   expect(request.url).toEqual('https://my-app-123456789012-eu-central-1-an.s3.eu-central-1.amazonaws.com/assets/file.js')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })
 
 // --- Request property preservation ---
@@ -152,13 +159,11 @@ test('preserves request body on matched route', async () => {
 // --- Route fallthrough (break vs continue) ---
 
 test('matches a later route when an earlier route is a partial substring match', () => {
-  // "example.com" is a substring of "api.example.com" but not a startsWith match,
-  // so the router should skip it and match the second route instead.
   const routes = {
     'example.com': 'https://frontend.example.com',
     'api.example.com': 'https://backend.example.com',
   }
-  const { request, cache } = normalizeRequest(new Request('https://api.example.com/data'), routes, false)
+  const { request, route } = normalizeRequest(new Request('https://api.example.com/data'), routes, false)
   expect(request.url).toEqual('https://backend.example.com/index.html')
-  expect(cache).toEqual(true)
+  expect(route).toBeDefined()
 })

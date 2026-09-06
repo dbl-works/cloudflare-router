@@ -4,17 +4,12 @@ Easily manage routing using Cloudflare Workers with Edge caching and Authenticat
 
 ## Setup
 
-> [!IMPORTANT]
-> **Cloudflare Workers `compatibility_date` ≥ `2025-05-01` required**
+No special setup is required for v3.0.0. Install the package via npm or yarn.
+
+> [!NOTE]
+> In v2.x, failing to specify an adequate `compatibility_date` caused the URLPattern engine to fail and return an `Unknown deployment` 404 error. URLPattern has been removed in v3.0.0 along with `deployments`, so this is no longer an issue.
 >
-> Since v2.0.0, deployment route matching uses the [URLPattern](https://developer.mozilla.org/en-US/docs/Web/API/URLPattern) API. The spec-compliant `urlpattern_standard` implementation became the default on `2025-05-01`.
->
-> With an older `compatibility_date`, the Workers runtime uses a **non-spec-compliant URLPattern** that silently fails to match routes, causing `"Unknown deployment"` (HTTP 404) errors.
->
-> ```toml
-> # wrangler.toml — ensure this is 2025-05-01 or later
-> compatibility_date = "2025-05-01"
-> ```
+> If you see an `Unknown host` 404 error in v3.0.0, it means the request did not match any entry in your `routes` configuration.
 
 ## Usage
 
@@ -22,10 +17,19 @@ Easily manage routing using Cloudflare Workers with Edge caching and Authenticat
 import { createRouter } from '@dbl-works/cloudflare-router'
 
 export default createRouter({
+  // Global cache TTL
+  edgeCacheTtl: 86400,
+
   routes: {
-    'example.com': 's3://eu-central-1.assets.example.com',
+    // Basic route mapping
+    'www.example.com': 's3://eu-central-1.my-bucket/landingpage',
+
+    // Per-route configuration
+    'app.example.com': {
+      origin: 's3://eu-central-1.my-bucket/app',
+      edgeCacheTtl: 60, // Overrides the global cache TTL
+    },
   },
-  edgeCacheTtl: 360 // seconds, Edge Cache TTL specifies how long to cache a resource in the Cloudflare edge network
 })
 ```
 
@@ -35,13 +39,6 @@ For single-page applications hosted on S3, non-asset requests (HTML navigation) 
 
 ```typescript
 export default createRouter({
-  deployments: [
-    {
-      accountId: 'your-account-id',
-      zoneId: 'your-zone-id',
-      routes: ['https://app.example.com/*'],
-    },
-  ],
   routes: {
     'app.example.com': 's3://eu-central-1.my-bucket/app',
   },
@@ -53,50 +50,37 @@ export default createRouter({
 - Starting with `/` does a path only match
 - Any other start will assume matching against `[domain][path]` as the value
 
-## Deployment Routes (URLPattern syntax)
-
-Since v2.0.0, deployment `routes` use [URLPattern](https://developer.mozilla.org/en-US/docs/Web/API/URLPattern) syntax (not glob patterns):
-
-```typescript
-// v2.0.0+ (URLPattern syntax)
-routes: ['https://app.example.com/*']
-routes: ['https://*.example.com/*']
-
-// v1.x (old glob syntax — no longer supported)
-routes: ['*app.example.com/*']
-```
-
 ## Basic Authentication & IP Restrictions
 
-You can protect a deployment by defining basic auth or IP restrictions in the config.
+You can protect specific routes by defining basic auth or IP restrictions per route, or globally in the config.
 
 ```typescript
 import { createRouter } from '@dbl-works/cloudflare-router'
 
 export default createRouter({
-  deployments: [
-    {
-      accountId: '12345',
-      zoneId: 'abcdef',
-      routes: [
-        'https://*.example.com/*',
-      ],
+  // Global auth rules applying to all routes (unless overridden)
+  auth: [{ type: 'basic', username: 'admin', password: 'password123' }],
+
+  routes: {
+    // This route uses the global basic auth rule
+    'admin.example.com': 's3://eu-central-1.my-bucket/admin',
+    
+    // This route opts out of auth entirely
+    'public.example.com': {
+      origin: 's3://eu-central-1.my-bucket/public',
+      auth: [],
+    },
+
+    // This route overrides global auth with its own IP restriction
+    'internal.example.com': {
+      origin: 's3://eu-central-1.my-bucket/internal',
       auth: [
         {
-          type: 'basic',
-          username: 'test',
-          password: 'letmein',
-        },
-        {
           type: 'ip',
-          allow: [
-            '192.168.1.1'
-          ],
+          allow: ['192.168.1.1'],
         }
       ],
-    },
-  ],
-  routes: {
+    }
   },
 })
 ```

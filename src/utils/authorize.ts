@@ -1,4 +1,4 @@
-import { CompiledDeployment, deploymentForRequest } from './deployment-for-request'
+import { Route, AuthMethods } from '../config'
 
 const getCredentialsFromAuthorizationHeader = (authorizationHeader: string | undefined | null) => {
   const encoded = (authorizationHeader || '').replace('Basic ', '')
@@ -39,24 +39,21 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 }
 
 // Ensures requests are authenticated before executing the callback
-export const withAuth = async (request: Request, compiledDeployments: CompiledDeployment[], callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
-  // If no deployments are defined, then just allow all requests to passthrough
-  // We also allow options requests here to get cors headers from origin
-  if (compiledDeployments.length === 0 || request.method === 'OPTIONS') {
+export const authorize = async (request: Request, route: Route | undefined, configAuth: AuthMethods[] | undefined, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
+  if (route === undefined) {
+    return new Response('Unknown host', { status: 404 })
+  }
+
+  if (request.method === 'OPTIONS') {
     return callback(request)
   }
 
-  // Look for a deployment matching the incoming request URL
-  const deployment = deploymentForRequest(request, compiledDeployments)
-  if (deployment === undefined) {
-    return new Response('Unknown deployment', { status: 404 })
-  }
+  const authRules = route.auth ?? configAuth
 
-  // If auth is defined, then let's check it
-  if (deployment.auth && deployment.auth.length > 0) {
+  if (authRules && authRules.length > 0) {
     let authorized = false;
 
-    for (const authConfig of deployment.auth) {
+    for (const authConfig of authRules) {
       if (authConfig.type === 'ip') {
         const clientIp = request.headers.get('CF-Connecting-IP') || '0.0.0.0/0'
         if (authConfig.allow.includes(clientIp)) {

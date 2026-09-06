@@ -5,9 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [3.0.0] - 2026-09-06
 ### Changed
+- **BREAKING**: Removed the `deployments` configuration array. Route matching, authentication, and cache rules are now driven entirely by the `routes` object. `createRouter` will throw an error if a `deployments` key is present.
+- **BREAKING**: An unknown host request (one that doesn't match any `routes` entry) now immediately returns a `404 Not Found` with the body `Unknown host`. Previously, if `deployments` was empty, the router would attempt to fetch the original URL, which could cause a worker to self-fetch infinitely.
+- **BREAKING**: `OPTIONS` requests to unknown hosts now return `404 Not Found`. Previously, they bypassed the deployment matching and were passed through to the upstream origin regardless of the host.
+- Auth rules can now be defined per-route or globally in `Config`.
+
 ### Added
+- Added per-route `edgeCacheTtl` support, allowing you to configure different cache lifetimes for different hosts.
 
 ## [2.0.0] - 2026-05-03
 ### Changed

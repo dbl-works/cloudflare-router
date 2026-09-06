@@ -1,4 +1,4 @@
-import { Config } from '../config'
+import { Config, Route } from '../config'
 
 const MEDIA_FILE_EXTENSIONS = [
   'css', 'csv', 'gif', 'ico', 'jpeg', 'jpg', 'js', 'json', 'map',
@@ -47,14 +47,15 @@ function resolveS3Url(shorthand: string): string {
   return `https://${bucket}.s3.${region}.${domain}${pathSuffix}`
 }
 
-export default function normalizeRequest(request: Request, routes: Config['routes'], isS3Site: boolean = true): { request: Request, cache: boolean } {
+export default function normalizeRequest(request: Request, routes: Config['routes'], isS3Site: boolean = true): { request: Request, route: Route | undefined } {
   const originalUrl = request.url
   const originalUrlWithoutScheme = originalUrl.replace(/^https?:\/\//, '')
   const path = originalUrlWithoutScheme.replace(/^.*?\//gi, '')
 
   for (const [key, value] of Object.entries(routes)) {
     let url = originalUrl
-    let newUrl = value
+    let newUrl = typeof value === 'string' ? value : value.origin
+    const route = typeof value === 'string' ? { origin: value } : value
     if (url.includes(key)) {
 
       if (!originalUrlWithoutScheme.startsWith(key) && !key.startsWith('/')) {
@@ -79,10 +80,9 @@ export default function normalizeRequest(request: Request, routes: Config['route
         url = 'https://' + url
       }
 
-      // Make sure we only cache requests from the stated routes
-      return { request: new Request(url, request), cache: true }
+      return { request: new Request(url, request), route }
     }
   }
 
-  return { request, cache: false }
+  return { request, route: undefined }
 }
