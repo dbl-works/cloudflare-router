@@ -91,3 +91,27 @@ test('An OPTIONS request to an unknown host returns 404', async () => {
   const res = await authorize(createAuthRequest('OPTIONS'), undefined, undefined, mockCallback)
   expect(res.status).toBe(404)
 })
+
+test('Strips Basic credentials from origin-bound requests (IP Auth)', async () => {
+  const route: Route = { origin: 's3://bucket', auth: [ipAuthMethod] }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  const res = await authorize(createAuthRequest('GET', basicAuthHeader, '192.168.1.1'), route, undefined, callback)
+  expect(res.status).toBe(200)
+  expect(forwardedReq?.headers.get('Authorization')).toBeNull()
+})
+
+test('Strips Basic credentials from origin-bound requests (OPTIONS)', async () => {
+  const route: Route = { origin: 's3://bucket', auth: [basicAuthMethod] }
+  let forwardedReq: Request | undefined
+  const callback = vi.fn().mockImplementation(async (req) => {
+    forwardedReq = req
+    return new Response('ok')
+  })
+  const res = await authorize(createAuthRequest('OPTIONS', basicAuthHeader), route, undefined, callback)
+  expect(res.status).toBe(200)
+  expect(forwardedReq?.headers.get('Authorization')).toBeNull()
+})

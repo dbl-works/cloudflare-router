@@ -58,12 +58,15 @@ export default function normalizeRequest(request: Request, routes: Config['route
     let url = originalUrl
     let newUrl = typeof value === 'string' ? value : value.origin
     const route = typeof value === 'string' ? { origin: value } : value
+    const parsedUrl = new URL(originalUrl)
+    
     if (url.includes(key)) {
-
       if (key.startsWith('/')) {
-        const matchIndex = url.indexOf(key)
-        const nextChar = url[matchIndex + key.length]
-        if (nextChar !== undefined && nextChar !== '/' && nextChar !== '?' && nextChar !== '#') {
+        if (!parsedUrl.pathname.startsWith(key)) {
+          continue
+        }
+        const nextChar = parsedUrl.pathname[key.length]
+        if (!key.endsWith('/') && nextChar !== undefined && nextChar !== '/') {
           continue
         }
       } else {
@@ -71,7 +74,7 @@ export default function normalizeRequest(request: Request, routes: Config['route
           continue
         }
         const nextChar = originalUrlWithoutScheme[key.length]
-        if (nextChar !== undefined && nextChar !== '/' && nextChar !== ':' && nextChar !== '?' && nextChar !== '#') {
+        if (!key.endsWith('/') && nextChar !== undefined && nextChar !== '/' && nextChar !== ':' && nextChar !== '?' && nextChar !== '#') {
           continue
         }
       }

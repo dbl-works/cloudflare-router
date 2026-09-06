@@ -167,3 +167,21 @@ test('matches a later route when an earlier route is a partial substring match',
   expect(request.url).toEqual('https://backend.example.com/index.html')
   expect(route).toBeDefined()
 })
+
+test('does not match query strings for path routes', () => {
+  const routes = { '/public': 's3://bucket/public' }
+  const { route } = normalizeRequest(new Request('https://unknown.test/?next=/public'), routes)
+  expect(route).toBeUndefined()
+})
+
+test('trailing slash keys match descendants', () => {
+  const routes = { '/admin/': 's3://bucket/admin' }
+  const { route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
+  expect(route).toBeDefined()
+})
+
+test('trailing slash keys match descendants for host paths', () => {
+  const routes = { 'example.com/admin/': 's3://bucket/admin' }
+  const { route } = normalizeRequest(new Request('https://example.com/admin/file.js'), routes)
+  expect(route).toBeDefined()
+})
