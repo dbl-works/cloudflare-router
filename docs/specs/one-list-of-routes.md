@@ -135,6 +135,7 @@ export interface Route {
   auth?: AuthMethods[]
   edgeCacheTtl?: number
   spa?: boolean
+  cors?: boolean
 }
 
 export type Routes = Record<string, string | Route>
@@ -144,6 +145,7 @@ export interface Config {
   auth?: AuthMethods[]
   edgeCacheTtl?: number
   spa?: boolean
+  cors?: boolean
 }
 ```
 
@@ -152,17 +154,18 @@ takes every default. An object overrides a default for that route.
 
 ### One resolution rule
 
-`auth`, `edgeCacheTtl` and `spa` resolve the same way. A route that sets the
-key uses its own value. Every other route uses the top-level value. Without
-either, the key takes its default.
+`auth`, `edgeCacheTtl`, `spa` and `cors` resolve the same way. A route that
+sets the key uses its own value. Every other route uses the top-level value.
+Without either, the key takes its default.
 
 | Key            | Default                                        |
 | -------------- | ---------------------------------------------- |
 | `auth`         | Public                                         |
 | `edgeCacheTtl` | `0`, no edge cache. This matches 2.x.          |
 | `spa`          | `true` for a storage origin such as `s3://`    |
+| `cors`         | `true` for a storage origin such as `s3://`    |
 
-One rule covers three keys, so a reader learns it once.
+One rule covers four keys, so a reader learns it once.
 
 ### Route matching
 
@@ -263,6 +266,12 @@ with its own Basic authentication. Credentials are compared after Unicode
 normalization on both sides. An IP rule needs the `CF-Connecting-IP` header.
 Without it, the rule never matches.
 
+A failed request gets a `401` with a Basic challenge only when the route has
+a `basic` rule. A route with IP rules alone answers `403` without a
+challenge. A challenge on an IP-only route would make a browser collect
+credentials that no rule can use, and re-send them to every path on the
+host.
+
 ### Edge cache
 
 A static asset host and an application host want different cache lifetimes.
@@ -330,12 +339,23 @@ to force a TTL of zero. A matched route is now the only way to reach
 `normalizeRequest` therefore returns the matched route instead of the flag.
 The caller reads the origin and the cache lifetime from one object.
 
-### `OPTIONS` requests
+### `OPTIONS` requests and `cors`
 
-Only a CORS preflight skips authentication, so a browser can read the CORS
-headers of the origin. A preflight is an `OPTIONS` request with an `Origin`
-header, an `Access-Control-Request-Method` header, and no body. Every other
-`OPTIONS` request is authenticated like a `GET`.
+A browser sends a CORS preflight without credentials, so a protected route
+must let it through for a cross-origin call to work. The preflight headers
+are client-controlled, so the preflight shape alone must never grant access.
+The route opts in with `cors`.
+
+On a route with `cors: true`, a CORS preflight skips authentication. A
+preflight is an `OPTIONS` request with an `Origin` header, an
+`Access-Control-Request-Method` header, and no body. The origin answers it.
+Every other `OPTIONS` request, and every preflight on a route without `cors`,
+is authenticated like a `GET`.
+
+`cors` defaults to `true` for a storage origin such as `s3://`, because a
+bucket has no handler that an unauthenticated `OPTIONS` could reach. It
+defaults to `false` for an application origin. A protected application origin
+that must serve cross-origin browsers sets `cors: true` on that route.
 
 An `OPTIONS` request still needs a matching route. An `OPTIONS` request to an
 unknown host returns 404, preflight or not.
@@ -473,8 +493,11 @@ This is a major release. These behaviors change:
   Before, a substring match on the serialized URL decided.
 * A path-only key is removed. Every key must name a host. `createRouter`
   throws on a key that starts with `/`.
-* Only a CORS preflight skips authentication on an `OPTIONS` request. Before,
-  every `OPTIONS` request skipped authentication.
+* Only a CORS preflight on a route with `cors` skips authentication on an
+  `OPTIONS` request. `cors` defaults to `true` for a storage origin only.
+  Before, every `OPTIONS` request skipped authentication.
+* A failed request on a route without a `basic` rule returns `403` without a
+  challenge. Before, every failure returned `401` with a Basic challenge.
 * Basic credential stripping is per host. When any route on a host uses a
   `basic` rule, the router strips the header from every route on that host.
   Before, stripping followed the effective rules of the route alone.
@@ -505,9 +528,13 @@ Rewrite `test/utils/with-auth.test.ts` as `test/utils/authorize.test.ts`:
 * A route with `auth` overrides the top-level `auth`.
 * An IP rule and a basic rule on one route both grant access.
 * An unknown host returns 404.
-* A CORS preflight to a protected route passes through without credentials.
+* A CORS preflight to a protected route with `cors` passes through without
+  credentials.
+* A CORS preflight to a protected route without `cors` is authenticated.
 * An `OPTIONS` request without a preflight header set is authenticated like a
   `GET`.
+* A failure on an IP-only route returns `403` without a `WWW-Authenticate`
+  header.
 * An `OPTIONS` request to an unknown host returns 404.
 
 Update `test/utils/normalize-request.test.ts`:
@@ -563,7 +590,10 @@ Delete `test/utils/deployment-for-request.test.ts`.
    request path before matching, and reject a key or a path origin that is
    not plain. Remove path-only keys, so a key must name a host. Scope Basic
    credential stripping to the host instead of the route. Skip
-   authentication only for a real CORS preflight on `OPTIONS`. Reject a
+   authentication only for a CORS preflight on a route with `cors`, which
+   defaults to `true` for storage origins only. Answer a failure on a route
+   without a `basic` rule with `403`. Reject an origin with a dot segment,
+   encoded or not, and a storage prefix with any percent-encoding. Reject a
    protected route that caches an application origin. Move the resolution of
    `auth`, `edgeCacheTtl`, and `spa` into `compileRoutes`, which now returns
    compiled routes with every default already resolved. `normalizeRequest`

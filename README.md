@@ -59,6 +59,22 @@ export default createRouter({
 })
 ```
 
+### CORS preflights
+
+A browser sends a CORS preflight without credentials. On a route with `cors: true`, a preflight skips authentication and the origin answers it. A preflight is an `OPTIONS` request with an `Origin` header, an `Access-Control-Request-Method` header, and no body. Every other `OPTIONS` request is authenticated like a `GET`.
+
+The preflight headers are client-controlled, so a route must opt in. `cors` defaults to `true` for a storage origin such as `s3://`, because a bucket has no handler to reach. It defaults to `false` for an application origin. The flag resolves like `spa`: a route value wins, then the top-level value, then the default.
+
+```typescript
+export default createRouter({
+  auth: [{ type: 'basic', username: 'admin', password: 'password123' }],
+  routes: {
+    // A protected API that browsers on another host call. Preflights pass, everything else needs credentials.
+    'api.example.com': { origin: 'https://backend.example.com', cors: true },
+  },
+})
+```
+
 ## Match rules
 
 A route key has one of two forms:
@@ -102,7 +118,8 @@ An origin has one of four forms:
 - Two keys that resolve to one route, such as `example.com/admin` and `example.com/admin/`.
 - An origin that is not `https://`, an `s3://` shorthand, a host, or a path.
 - An origin with whitespace, credentials, a query, or a fragment.
-- An `s3://` origin that does not have the form `s3://REGION.BUCKET` or `s3://REGION.BUCKET/PREFIX`. A region holds lowercase letters, digits, and hyphens. A bucket holds one or more such labels joined by single dots. A prefix must not contain an empty, `.`, or `..` segment.
+- An origin with a `.` or `..` segment, encoded or not, or with an encoded slash or control character in its path.
+- An `s3://` origin that does not have the form `s3://REGION.BUCKET` or `s3://REGION.BUCKET/PREFIX`. A label holds lowercase letters, digits, and hyphens, and does not start or end with a hyphen. A region is one label. A bucket is one or more labels joined by single dots. A prefix must not contain an empty segment or percent-encoding.
 - A `basic` auth rule without a non-empty username and password.
 - An `ip` auth rule without at least one address in `allow`.
 - An `edgeCacheTtl` that is not a whole number of seconds, 0 or more.
@@ -116,6 +133,8 @@ The hosts the worker serves are exactly the hosts the keys name, so this self-fe
 You can protect specific routes by defining basic auth or IP restrictions per route, or globally in the config.
 
 An `ip` rule lists exact client IP addresses. CIDR ranges are not supported. The client IP comes from the `CF-Connecting-IP` header that Cloudflare sets. A request without that header never satisfies an `ip` rule.
+
+A failed request gets a `401` with a Basic challenge only when the route has a `basic` rule. A route with IP rules alone answers `403` without a challenge, so a browser never collects credentials that no rule can use.
 
 A `basic` rule on any route of a host affects every route on that host. The router removes the `Authorization: Basic ...` header from each route before it contacts the origin, including a public sibling route. A browser re-sends Basic credentials to every path on a host, so a public sibling route would otherwise forward the edge credentials to its origin. On a host where no route uses Basic auth, the header stays, so a route can proxy to an origin with its own Basic authentication.
 

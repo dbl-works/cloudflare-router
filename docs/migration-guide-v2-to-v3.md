@@ -181,11 +181,24 @@ The router splits the request pathname into segments, percent-decodes each segme
 
 A request now matches no route, and returns 404, when a segment fails to decode, decodes to `/`, `\`, `.`, or `..`, or holds a control character. This closes a bypass where an encoded path reached a route that the raw path would have missed.
 
-## 11. Only a CORS preflight skips authentication on `OPTIONS`
+## 11. Only a CORS preflight on a route with `cors` skips authentication
 
 In v2.x, every `OPTIONS` request skipped authentication.
 
-In v3.0.0, only a CORS preflight skips authentication: an `OPTIONS` request with an `Origin` header, an `Access-Control-Request-Method` header, and no body. Every other `OPTIONS` request is authenticated like a `GET`. An `OPTIONS` request to an unknown host still returns 404.
+In v3.0.0, a CORS preflight skips authentication only on a route with `cors: true`. A preflight is an `OPTIONS` request with an `Origin` header, an `Access-Control-Request-Method` header, and no body. Every other `OPTIONS` request is authenticated like a `GET`. An `OPTIONS` request to an unknown host still returns 404.
+
+`cors` resolves like `spa`. It defaults to `true` for a storage origin such as `s3://` and to `false` for any other origin. If browsers on another host call a protected application origin through the router, set `cors: true` on that route.
+
+```typescript
+export default createRouter({
+  auth: [{ type: 'basic', username: 'test', password: 'letmein' }],
+  routes: {
+    'api.example.com': { origin: 'https://backend.example.com', cors: true },
+  },
+})
+```
+
+A failed request on a route without a `basic` rule now returns `403` without a `WWW-Authenticate` header. In v2.x every failure returned `401` with a Basic challenge.
 
 ## 12. Basic credential stripping is per host
 

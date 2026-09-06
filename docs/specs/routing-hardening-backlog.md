@@ -15,7 +15,8 @@ A second security review moved five of the original items into 3.0.0:
 * The percent-encoded path bypass.
 * The authentication-and-cache interaction.
 * The unnamed-host gap in the self-fetch check.
-* The shared `WWW-Authenticate` realm.
+* Edge credential leakage through a public sibling route, and the Basic
+  challenge on IP-only routes.
 
 Those items no longer appear below. See `one-list-of-routes.md` for the
 shipped design.

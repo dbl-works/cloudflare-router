@@ -10,11 +10,21 @@ const one = (routes: Parameters<typeof compileRoutes>[0]['routes'], config: Omit
 
 // --- One resolution rule ---
 
-test('a route without auth, edgeCacheTtl or spa takes the defaults', () => {
+test('a route without auth, edgeCacheTtl, spa or cors takes the defaults', () => {
   const route = one({ 'app.example.com': S3 })
   expect(route.auth).toEqual([])
   expect(route.edgeCacheTtl).toBe(0)
   expect(route.spa).toBe(true)
+  expect(route.cors).toBe(true)
+})
+
+test('an application origin forwards no unauthenticated preflight by default', () => {
+  expect(one({ 'api.example.com': 'https://backend.example' }).cors).toBe(false)
+})
+
+test('cors resolves like the other keys', () => {
+  expect(one({ 'api.example.com': 'https://backend.example' }, { cors: true }).cors).toBe(true)
+  expect(one({ 'app.example.com': { origin: S3, cors: false } }, { cors: true }).cors).toBe(false)
 })
 
 test('a route without a value takes the config value', () => {
@@ -121,6 +131,13 @@ test('a deeper route that wins for its own path is reachable', () => {
     'a.example.com': 'https://b.example.com/',
     'b.example.com/legacy': 'https://a.example.com',
   } })).toThrow(/fetches itself/)
+})
+
+test('an origin whose path cannot be canonicalized is rejected, not treated as root', () => {
+  expect(() => compileRoutes({ routes: {
+    'a.example.com': 'https://b.example.com/%2Floop',
+    'b.example.com': 'https://a.example.com',
+  } })).toThrow(/encoded slash/)
 })
 
 test('a deeper route that never wins is not reachable', () => {

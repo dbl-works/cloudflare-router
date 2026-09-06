@@ -17,6 +17,8 @@ export interface Route {
   edgeCacheTtl?: number
   /** Serve index.html for navigations. Defaults to true for storage origins such as s3://. */
   spa?: boolean
+  /** Forward CORS preflights without authentication. Defaults to true for storage origins such as s3://. */
+  cors?: boolean
 }
 
 export type Routes = Record<string, string | Route>
@@ -26,4 +28,5 @@ export interface Config {
   auth?: AuthMethods[]
   edgeCacheTtl?: number
   spa?: boolean
+  cors?: boolean
 }

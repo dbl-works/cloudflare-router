@@ -1,8 +1,10 @@
 import type { StorageProvider } from './index'
 
-// REGION.BUCKET, then an optional prefix. A region is lowercase letters, digits and hyphens.
-// A bucket is one or more such labels joined by single dots. A prefix has no empty or dot segments.
-const SHORTHAND = /^s3:\/\/([a-z0-9-]+)\.([a-z0-9-]+(?:\.[a-z0-9-]+)*)((?:\/(?!\.\.?(?:\/|$))[^/?#\s]+)*\/?)$/
+// REGION.BUCKET, then an optional prefix. A label is lowercase letters, digits and hyphens, and does not
+// start or end with a hyphen. A region is one label. A bucket is labels joined by single dots.
+// A prefix has no empty, dot or percent-encoded segments, so URL normalization cannot move it.
+const LABEL = '[a-z0-9](?:[a-z0-9-]*[a-z0-9])?'
+const SHORTHAND = new RegExp(`^s3://(${LABEL})\\.(${LABEL}(?:\\.${LABEL})*)((?:/(?!\\.\\.?(?:/|$))[^/?#\\s%]+)*/?)$`)
 
 /**
  * Resolves the AWS domain suffix based on the S3 region.

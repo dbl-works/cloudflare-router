@@ -16,6 +16,7 @@ export interface CompiledRoute {
   auth: AuthMethods[]
   edgeCacheTtl: number
   spa: boolean
+  cors: boolean
   /** Remove Basic credentials before the origin fetch. True when any route on this host uses Basic auth. */
   stripBasicCredentials: boolean
 }
@@ -151,6 +152,8 @@ function validateAuth(key: string, auth: AuthMethods[]): void {
 function validateOrigin(key: string, origin: string): void {
   if (typeof origin !== 'string' || origin === '') throw invalid(key, 'the origin must be a non-empty string.')
   if (/[?#\s]/.test(origin)) throw invalid(key, 'an origin must not contain whitespace, a query or a fragment. The request path is appended to it.')
+  // The URL parser resolves dot segments, encoded or not, before any later check can see them.
+  if (/(^|\/)(\.|%2e){1,2}(\/|$)/i.test(origin)) throw invalid(key, 'an origin must not contain "." or ".." segments, encoded or not.')
 
   const provider = providerFor(origin)
   if (provider && !provider.shorthand.test(origin)) throw invalid(key, `a ${provider.scheme}:// origin must have the form ${provider.usage}.`)
@@ -167,6 +170,7 @@ function validateOrigin(key: string, origin: string): void {
     throw invalid(key, `"${origin}" does not resolve to a valid URL.`)
   }
   if (url.username !== '' || url.password !== '') throw invalid(key, 'an origin must not contain credentials.')
+  if (canonicalPath(url.pathname) === undefined) throw invalid(key, 'an origin path must not contain an encoded slash, a dot segment or a control character.')
 }
 
 /**
@@ -176,9 +180,11 @@ function targetOf(route: CompiledRoute): { host: string, path: string[] } {
   if (route.origin.startsWith('/')) {
     return { host: route.host, path: parseSegments(route.origin, route.key) }
   }
+  // validateOrigin has rejected every origin whose path fails canonicalization.
   const url = new URL(resolveOrigin(route.origin, new URL('https://unknown.invalid/')))
   const path = canonicalPath(url.pathname)
-  return { host: url.hostname, path: path?.decoded ?? [] }
+  if (!path) throw invalid(route.key, 'an origin path must not contain an encoded slash, a dot segment or a control character.')
+  return { host: url.hostname, path: path.decoded }
 }
 
 /**
@@ -230,21 +236,23 @@ function rejectCycles(routes: CompiledRoute[]): void {
  * invalid route, so a bad configuration fails at startup instead of on a
  * request. Compile once and reuse the result for every request.
  */
-export function compileRoutes(config: Pick<Config, 'routes' | 'auth' | 'edgeCacheTtl' | 'spa'>): CompiledRoute[] {
+export function compileRoutes(config: Pick<Config, 'routes' | 'auth' | 'edgeCacheTtl' | 'spa' | 'cors'>): CompiledRoute[] {
   const compiled: CompiledRoute[] = Object.entries(config.routes).map(([key, value]) => {
     const route: Route = typeof value === 'string' ? { origin: value } : value
     const auth = route.auth ?? config.auth ?? []
     const edgeCacheTtl = route.edgeCacheTtl ?? config.edgeCacheTtl ?? 0
-    const spa = route.spa ?? config.spa ?? providerFor(route.origin) !== undefined
+    const isStorage = providerFor(route.origin) !== undefined
+    const spa = route.spa ?? config.spa ?? isStorage
+    const cors = route.cors ?? config.cors ?? isStorage
 
     validateOrigin(key, route.origin)
     validateAuth(key, auth)
     if (!Number.isInteger(edgeCacheTtl) || edgeCacheTtl < 0) throw invalid(key, '"edgeCacheTtl" must be a whole number of seconds, 0 or more.')
-    if (edgeCacheTtl > 0 && auth.length > 0 && !providerFor(route.origin)) {
+    if (edgeCacheTtl > 0 && auth.length > 0 && !isStorage) {
       throw invalid(key, 'a protected route caches only a storage origin. The edge cache key is the URL, so a cached response from an application origin would be served to every authorized user. Set "edgeCacheTtl: 0" on this route.')
     }
 
-    return { key, ...parseRouteKey(key), origin: route.origin, auth, edgeCacheTtl, spa, stripBasicCredentials: false }
+    return { key, ...parseRouteKey(key), origin: route.origin, auth, edgeCacheTtl, spa, cors, stripBasicCredentials: false }
   })
 
   const seen = new Map<string, string>()

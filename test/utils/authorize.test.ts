@@ -9,8 +9,8 @@ const ipAuthMethod = { type: 'ip', allow: ['192.168.1.1'] } as const
 const basicAuthHeader = 'Basic ' + btoa('test:letmein')
 
 /** A compiled route with resolved rules. Stripping defaults to what compileRoutes derives for a single-route host. */
-const route = (auth: AuthMethods[] = [], stripBasicCredentials = auth.some((rule) => rule.type === 'basic')) =>
-  ({ auth, stripBasicCredentials })
+const route = (auth: AuthMethods[] = [], stripBasicCredentials = auth.some((rule) => rule.type === 'basic'), cors = false) =>
+  ({ auth, cors, stripBasicCredentials })
 
 const request = (method = 'GET', headers: Record<string, string> = {}, body?: string) =>
   new Request('https://example.com', { method, headers, body })
@@ -45,7 +45,19 @@ test('Wrong credentials return 401', async () => {
 
 test('An IP rule grants access from an allowed address only', async () => {
   expect((await authorize(authed('GET', undefined, '192.168.1.1'), route([ipAuthMethod]), mockCallback)).status).toBe(200)
-  expect((await authorize(authed('GET', undefined, '2.2.2.2'), route([ipAuthMethod]), mockCallback)).status).toBe(401)
+  expect((await authorize(authed('GET', undefined, '2.2.2.2'), route([ipAuthMethod]), mockCallback)).status).toBe(403)
+})
+
+test('An IP-only failure is a 403 without a Basic challenge', async () => {
+  const res = await authorize(authed('GET', undefined, '2.2.2.2'), route([ipAuthMethod]), mockCallback)
+  expect(res.status).toBe(403)
+  expect(res.headers.get('WWW-Authenticate')).toBeNull()
+})
+
+test('A failure on a route with a Basic rule is a 401 with a challenge', async () => {
+  const res = await authorize(authed('GET', undefined, '2.2.2.2'), route([basicAuthMethod, ipAuthMethod]), mockCallback)
+  expect(res.status).toBe(401)
+  expect(res.headers.get('WWW-Authenticate')).toMatch(/^Basic /)
 })
 
 test('An IP rule and a basic rule on one route both grant access', async () => {
@@ -65,22 +77,28 @@ test('An OPTIONS request to an unknown host returns 404', async () => {
   expect((await authorize(authed('OPTIONS'), undefined, mockCallback)).status).toBe(404)
 })
 
-// --- OPTIONS: only a CORS preflight skips authentication ---
+// --- OPTIONS: only a CORS preflight on a route with cors skips authentication ---
 
 const preflightHeaders = { Origin: 'https://app.example.com', 'Access-Control-Request-Method': 'PUT' }
+const corsRoute = route([basicAuthMethod], true, true)
 
-test('A CORS preflight to a protected route passes through', async () => {
-  expect((await authorize(request('OPTIONS', preflightHeaders), route([basicAuthMethod]), mockCallback)).status).toBe(200)
+test('A CORS preflight to a protected route with cors passes through', async () => {
+  expect((await authorize(request('OPTIONS', preflightHeaders), corsRoute, mockCallback)).status).toBe(200)
 })
 
-test('A plain OPTIONS request to a protected route needs credentials', async () => {
-  expect((await authorize(request('OPTIONS'), route([basicAuthMethod]), mockCallback)).status).toBe(401)
-  expect((await authorize(request('OPTIONS', { Origin: 'https://app.example.com' }), route([basicAuthMethod]), mockCallback)).status).toBe(401)
-  expect((await authorize(request('OPTIONS', { 'Access-Control-Request-Method': 'PUT' }), route([basicAuthMethod]), mockCallback)).status).toBe(401)
+test('A CORS preflight to a protected route without cors needs credentials', async () => {
+  expect((await authorize(request('OPTIONS', preflightHeaders), route([basicAuthMethod]), mockCallback)).status).toBe(401)
+  expect((await authorize(request('OPTIONS', preflightHeaders), route([ipAuthMethod]), mockCallback)).status).toBe(403)
+})
+
+test('A plain OPTIONS request to a protected route needs credentials even with cors', async () => {
+  expect((await authorize(request('OPTIONS'), corsRoute, mockCallback)).status).toBe(401)
+  expect((await authorize(request('OPTIONS', { Origin: 'https://app.example.com' }), corsRoute, mockCallback)).status).toBe(401)
+  expect((await authorize(request('OPTIONS', { 'Access-Control-Request-Method': 'PUT' }), corsRoute, mockCallback)).status).toBe(401)
 })
 
 test('An OPTIONS request with a body is not a preflight', async () => {
-  expect((await authorize(request('OPTIONS', preflightHeaders, 'payload'), route([basicAuthMethod]), mockCallback)).status).toBe(401)
+  expect((await authorize(request('OPTIONS', preflightHeaders, 'payload'), corsRoute, mockCallback)).status).toBe(401)
 })
 
 test('An authenticated OPTIONS request passes through', async () => {
@@ -106,7 +124,7 @@ test('Strips lowercase basic credentials', async () => {
 })
 
 test('Strips Basic credentials on a preflight', async () => {
-  const seen = await forwarded(request('OPTIONS', { ...preflightHeaders, Authorization: basicAuthHeader }), route([basicAuthMethod]))
+  const seen = await forwarded(request('OPTIONS', { ...preflightHeaders, Authorization: basicAuthHeader }), corsRoute)
   expect(seen?.headers.get('Authorization')).toBeNull()
 })
 
@@ -128,7 +146,7 @@ test('Keeps a Bearer token when the IP rule grants access on a Basic host', asyn
 // --- IP rules ---
 
 test('A missing CF-Connecting-IP header never satisfies an IP rule', async () => {
-  expect((await authorize(request(), route([{ type: 'ip', allow: ['0.0.0.0/0'] }]), mockCallback)).status).toBe(401)
+  expect((await authorize(request(), route([{ type: 'ip', allow: ['0.0.0.0/0'] }]), mockCallback)).status).toBe(403)
 })
 
 // --- Unicode credentials ---

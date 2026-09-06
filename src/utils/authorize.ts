@@ -80,8 +80,8 @@ const withoutBasicCredentials = (request: Request): Request => {
 
 /**
  * A CORS preflight, as a browser sends it: OPTIONS with an Origin and the
- * method it asks about, and no body. Any other OPTIONS request is an
- * ordinary request.
+ * method it asks about, and no body. Any client can forge these headers, so
+ * the shape alone never grants access. The route must opt in with `cors`.
  */
 const isCorsPreflight = (request: Request): boolean =>
   request.method === 'OPTIONS'
@@ -91,21 +91,25 @@ const isCorsPreflight = (request: Request): boolean =>
 
 /**
  * Gates a request with the resolved auth rules of its route. An empty list
- * means public. An unknown route is a 404. A CORS preflight passes, so a
- * browser can read the CORS headers of the origin.
+ * means public. An unknown route is a 404. On a route with `cors`, a CORS
+ * preflight passes so a browser can read the CORS headers of the origin.
+ *
+ * A failed request gets a Basic challenge only when the route has a Basic
+ * rule. A browser must never collect credentials for a route that cannot
+ * use them, because it would re-send them across the host.
  *
  * When any route on the host uses Basic auth, the Authorization header
  * belongs to the edge and is removed before the callback runs. Otherwise the
  * header may belong to the origin and is kept.
  */
-export const authorize = async (request: Request, route: Pick<CompiledRoute, 'auth' | 'stripBasicCredentials'> | undefined, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
+export const authorize = async (request: Request, route: Pick<CompiledRoute, 'auth' | 'cors' | 'stripBasicCredentials'> | undefined, callback: (request: Request) => Promise<Response> | Response): Promise<Response> => {
   if (route === undefined) {
     return new Response('Unknown host', { status: 404 })
   }
 
   const forward = (req: Request) => callback(route.stripBasicCredentials ? withoutBasicCredentials(req) : req)
 
-  if (route.auth.length === 0 || isCorsPreflight(request)) {
+  if (route.auth.length === 0 || (route.cors && isCorsPreflight(request))) {
     return forward(request)
   }
 
@@ -115,10 +119,13 @@ export const authorize = async (request: Request, route: Pick<CompiledRoute, 'au
     }
   }
 
-  return new Response('Unauthorized.', {
-    status: 401,
-    headers: {
-      'WWW-Authenticate': 'Basic realm="Cloudflare Router", charset="UTF-8"',
-    },
-  })
+  if (route.auth.some((rule) => rule.type === 'basic')) {
+    return new Response('Unauthorized.', {
+      status: 401,
+      headers: {
+        'WWW-Authenticate': 'Basic realm="Cloudflare Router", charset="UTF-8"',
+      },
+    })
+  }
+  return new Response('Forbidden.', { status: 403 })
 }
