@@ -40,12 +40,35 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return prototype === Object.prototype || prototype === null
 }
 
-/** Own fields only. Together with `isPlainObject` this is the only way configuration is read. */
-const ownFields = (value: Record<string, unknown>): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(value))
+/**
+ * Copies the own fields of a configuration object, enumerable or not, into a
+ * fresh null-prototype object. Configuration is plain data, so a symbol key
+ * or an accessor property throws instead of being read or skipped. Together
+ * with `isPlainObject` this is the only way configuration is read.
+ */
+function ownFields(where: string, value: Record<string, unknown>): Record<string, unknown> {
+  const copy: Record<string, unknown> = Object.create(null)
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string') throw new Error(`${where} has a symbol key. Configuration is plain data.`)
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (descriptor === undefined || !('value' in descriptor)) throw new Error(`"${key}" in ${where} is an accessor. Configuration is plain data.`)
+    Object.defineProperty(copy, key, { value: descriptor.value, enumerable: true, writable: true, configurable: true })
+  }
+  return copy
+}
 
-/** Every index of a list, holes included, so a sparse array cannot hide an undefined rule. */
-const everyIndex = (value: unknown[]): unknown[] => Array.from(value)
+/**
+ * Copies every index of a list, holes included, so a sparse array cannot
+ * hide an undefined rule. The list must be a real array with data elements.
+ */
+function everyIndex(where: string, value: unknown): unknown[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) throw new Error(`${where} must be a plain array.`)
+  return Array.from({ length: value.length }, (_, index) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (descriptor !== undefined && !('value' in descriptor)) throw new Error(`${where} has an accessor element. Configuration is plain data.`)
+    return descriptor?.value
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Configuration shape. Every value is checked at runtime, because a
@@ -64,7 +87,7 @@ const REMOVED_KEYS: Record<string, string> = {
 function rejectUnknownKeys(where: string, value: Record<string, unknown>, allowed: string[]): void {
   for (const name of Object.keys(value)) {
     if (allowed.includes(name)) continue
-    if (name in REMOVED_KEYS) throw new Error(REMOVED_KEYS[name])
+    if (Object.hasOwn(REMOVED_KEYS, name)) throw new Error(REMOVED_KEYS[name])
     throw new Error(`Unknown key "${name}" in ${where}. Allowed keys: ${allowed.join(', ')}.`)
   }
 }
@@ -86,9 +109,9 @@ function checkTtl(where: string, value: unknown): number | undefined {
 function checkAuth(where: string, value: unknown): AuthMethods[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value)) throw new Error(`"auth" in ${where} must be a list of rules.`)
-  return everyIndex(value).map((entry): AuthMethods => {
+  return everyIndex(`"auth" in ${where}`, value).map((entry): AuthMethods => {
     if (!isPlainObject(entry)) throw new Error(`"auth" in ${where} has a rule that is not an object.`)
-    const rule = ownFields(entry)
+    const rule = ownFields(`a rule of ${where}`, entry)
     if (typeof rule.type !== 'string' || !Object.hasOwn(RULE_KEYS, rule.type)) {
       throw new Error(`"auth" in ${where} has a rule without a type of "basic" or "ip".`)
     }
@@ -100,7 +123,7 @@ function checkAuth(where: string, value: unknown): AuthMethods[] | undefined {
       return { type: 'basic', username: rule.username, password: rule.password }
     }
     if (!Array.isArray(rule.allow) || rule.allow.length === 0) throw new Error(`an ip rule of ${where} needs at least one address in "allow".`)
-    const allow = everyIndex(rule.allow).map((address) => {
+    const allow = everyIndex(`"allow" of an ip rule of ${where}`, rule.allow).map((address) => {
       const canonical = typeof address === 'string' ? canonicalIp(address) : undefined
       if (canonical === undefined) throw new Error(`an ip rule of ${where} lists "${String(address)}", which is not one IP address. CIDR ranges are not supported.`)
       return canonical
@@ -283,7 +306,7 @@ function rejectCycles(routes: CompiledRoute[]): void {
  */
 export function compileRoutes(input: unknown): CompiledRoute[] {
   if (!isPlainObject(input)) throw new Error('The configuration must be a plain object.')
-  const config = ownFields(input)
+  const config = ownFields('the configuration', input)
   rejectUnknownKeys('the configuration', config, CONFIG_KEYS)
   if (!isPlainObject(config.routes)) throw new Error('"routes" must be a plain object that maps a key to an origin or a route.')
 
@@ -294,10 +317,10 @@ export function compileRoutes(input: unknown): CompiledRoute[] {
     cors: checkFlag('the configuration', 'cors', config.cors),
   }
 
-  const compiled: CompiledRoute[] = Object.entries(ownFields(config.routes)).map(([key, value]) => {
+  const compiled: CompiledRoute[] = Object.entries(ownFields('"routes"', config.routes)).map(([key, value]) => {
     const where = `route "${key}"`
     if (typeof value !== 'string' && !isPlainObject(value)) throw invalid(key, 'the value must be an origin string or a plain route object.')
-    const route: Record<string, unknown> = typeof value === 'string' ? { origin: value } : ownFields(value)
+    const route: Record<string, unknown> = typeof value === 'string' ? { origin: value } : ownFields(where, value)
     rejectUnknownKeys(where, route, ROUTE_KEYS)
 
     const { host, path } = parseRouteKey(key)

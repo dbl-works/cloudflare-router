@@ -168,6 +168,30 @@ test.each([
   expect(() => compileRoutes(config)).toThrow(message)
 })
 
+test('a non-enumerable top-level auth still protects every route', () => {
+  const config = { routes: { 'a.example.com': 'https://origin.example' } }
+  Object.defineProperty(config, 'auth', { value: [basic], enumerable: false })
+  expect(compileRoutes(config)[0].auth).toEqual([basic])
+})
+
+test('a non-enumerable unknown key is still rejected', () => {
+  const config = { routes: {} }
+  Object.defineProperty(config, 'edgeCacheTTL', { value: 5, enumerable: false })
+  expect(() => compileRoutes(config)).toThrow(/Unknown key "edgeCacheTTL"/)
+})
+
+test.each([
+  ['a getter on the config', Object.defineProperty({ routes: {} }, 'auth', { get: () => [], enumerable: true }), /"auth" in the configuration is an accessor/],
+  ['a getter on a route', { routes: { 'a.example.com': Object.defineProperty({ origin: S3 }, 'auth', { get: () => [] }) } }, /"auth" in route "a.example.com" is an accessor/],
+  ['a symbol key on a route', { routes: { 'a.example.com': { origin: S3, [Symbol('x')]: 1 } } }, /has a symbol key/],
+  ['an own __proto__ key', { routes: { 'a.example.com': JSON.parse('{"origin":"https://origin.example","__proto__":{"auth":[]}}') } }, /Unknown key "__proto__" in route/],
+  ['a key named constructor', { routes: {}, constructor: 1 }, /Unknown key "constructor" in the configuration/],
+  ['an auth list with a swapped prototype', { auth: Object.setPrototypeOf([{ type: 'ip', allow: ['1.1.1.1'] }], { [Symbol.iterator]: function* () {} }), routes: { 'a.example.com': S3 } }, /must be a plain array/],
+  ['an allow list with an accessor element', { auth: [{ type: 'ip', allow: Object.defineProperty([], 0, { get: () => '1.1.1.1', enumerable: true }) }], routes: { 'a.example.com': S3 } }, /accessor element/],
+])('compileRoutes rejects %s', (_name, config, message) => {
+  expect(() => compileRoutes(config)).toThrow(message)
+})
+
 test('IPv6 addresses in rules are canonicalized', () => {
   const route = one({ 'a.example.com': { origin: S3, auth: [{ type: 'ip', allow: ['2001:DB8::1', '2001:db8:0:0:0:0:0:2', '::FFFF:1.2.3.4'] }] } })
   expect(route.auth).toEqual([{ type: 'ip', allow: ['2001:db8::1', '2001:db8::2', '::ffff:102:304'] }])

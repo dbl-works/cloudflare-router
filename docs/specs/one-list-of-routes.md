@@ -218,8 +218,11 @@ shipped validation therefore rests on three invariants, each in one place:
    rewrites. The invariant: parsing a plain path as a URL is the identity.
 2. **Every runtime value is validated.** Types do not protect a JavaScript
    consumer. The config, a route object and a rule must be plain objects with
-   a normal or null prototype, and only own fields are read, so an inherited
-   `auth: []` cannot override a protected default. A sparse list throws.
+   a normal or null prototype. The boundary copies every own data field,
+   enumerable or not, through its property descriptor into a null-prototype
+   object, so an inherited `auth: []` cannot override a protected default and
+   a non-enumerable `auth` cannot vanish silently. A getter, a symbol key, a
+   list with a foreign prototype or a sparse list throws.
    Unknown keys on the config, a route or an auth rule throw, which
    also covers the removed `deployments` and `isS3Site` keys with a message
    that names the replacement. Flags must be booleans, the TTL a whole
